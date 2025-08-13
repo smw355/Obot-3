@@ -24,6 +24,7 @@ A post-apocalyptic survival game via MCP (Model Context Protocol) server. Contro
 npm install github:smw355/Obot-3
 npx obot-3-explorer
 ```
+*No build step required - pre-compiled JavaScript included*
 
 ### Option 2: Run with npx (if published to npm)
 ```bash
