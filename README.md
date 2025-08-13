@@ -19,25 +19,31 @@ A post-apocalyptic survival game via MCP (Model Context Protocol) server. Contro
 
 ## 🚀 Quick Start
 
-### Option 1: Run with npx (Recommended)
+### Option 1: Install from GitHub (Recommended)
+```bash
+npm install github:smw355/Obot-3
+npx obot-3-explorer
+```
+
+### Option 2: Run with npx (if published to npm)
 ```bash
 npx obot-3-explorer
 ```
 
-### Option 2: Global Installation
+### Option 3: Global Installation from GitHub
 ```bash
-npm install -g obot-3-explorer
+npm install -g github:smw355/Obot-3
 obot-3-explorer
 ```
 
-### Option 3: MCP Client Integration
+### Option 4: MCP Client Integration
 Add to your MCP client configuration:
 ```json
 {
   "mcpServers": {
     "obot-3-explorer": {
-      "command": "npx",
-      "args": ["obot-3-explorer"]
+      "command": "node",
+      "args": ["path/to/node_modules/obot-3-explorer/dist/index.js"]
     }
   }
 }

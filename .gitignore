@@ -2,7 +2,6 @@ node_modules/
 *.db
 *.sqlite
 *.sqlite3
-dist/
 .env
 .DS_Store
 npm-debug.log*
