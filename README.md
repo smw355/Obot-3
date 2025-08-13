@@ -109,8 +109,8 @@ This game runs as an MCP server, providing tools that can be used by any MCP-com
 
 ```bash
 # Clone and setup
-git clone https://github.com/yourusername/obot-3-explorer.git
-cd obot-3-explorer
+git clone https://github.com/smw355/Obot-3.git
+cd Obot-3
 npm install
 npm run dev
 
