@@ -39,14 +39,15 @@ export interface Mob {
     damageType: string;
     location: string;
     isAlive: boolean;
-    specialAbility?: string;
+    specialAbility: string;
 }
 export interface CombatEffect {
     id: string;
-    type: string;
-    duration: number;
-    damage: number;
+    effectType: string;
     description: string;
+    duration: number;
+    value: number;
+    createdAt: string;
 }
 export interface BunkerInventory {
     id: string;
@@ -58,28 +59,27 @@ export interface BunkerInventory {
 }
 export declare class Database {
     private db;
-    runAsync: (sql: string, params?: any[]) => Promise<any>;
-    private getAsync;
-    allAsync: (sql: string, params?: any[]) => Promise<any[]>;
-    constructor(filename?: string);
+    private dbPath;
+    constructor();
     initialize(): Promise<void>;
-    createNewGame(): Promise<void>;
+    private saveDatabase;
+    initializeBunkerSupplies(): Promise<void>;
     getGameState(): Promise<GameState | null>;
     updateGameState(updates: Partial<GameState>): Promise<void>;
     getRoom(id: string): Promise<Room | null>;
     discoverRoom(id: string): Promise<void>;
     clearRoom(id: string): Promise<void>;
-    updateRoomExits(id: string, exits: string): Promise<void>;
+    updateRoomExits(roomId: string, exits: string): Promise<void>;
     getItemsInLocation(location: string): Promise<Item[]>;
     moveItem(itemId: string, newLocation: string): Promise<void>;
     getMobsInLocation(location: string): Promise<Mob[]>;
-    updateMobHealth(mobId: string, health: number): Promise<void>;
-    addCombatEffect(effect: CombatEffect): Promise<void>;
+    updateMobHealth(mobId: string, newHealth: number): Promise<void>;
+    getMob(mobId: string): Promise<Mob | null>;
+    addCombatEffect(id: string, effectType: string, description: string, duration: number, value?: number): Promise<void>;
     getCombatEffects(): Promise<CombatEffect[]>;
-    updateCombatEffect(id: string, duration: number): Promise<void>;
+    updateCombatEffectDuration(id: string, newDuration: number): Promise<void>;
     getBunkerInventory(): Promise<BunkerInventory[]>;
-    addToBunkerInventory(itemId: string, name: string, quantity: number, type: string, description: string, survivalDays?: number): Promise<void>;
-    initializeBunkerSupplies(): Promise<void>;
-    close(): Promise<void>;
+    addToBunkerInventory(id: string, name: string, quantity: number, type: string, description: string, survivalDays?: number): Promise<void>;
+    runAsync(sql: string, params?: any[]): Promise<any>;
 }
 //# sourceMappingURL=database.d.ts.map

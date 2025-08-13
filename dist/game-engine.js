@@ -64,11 +64,10 @@ class GameEngine {
     }
     // Combat system
     async processCombat(mobId, gameState) {
-        const mob = await this.db.allAsync('SELECT * FROM mobs WHERE id = ? AND isAlive = TRUE', [mobId]);
-        if (mob.length === 0) {
+        const mobData = await this.db.getMob(mobId);
+        if (!mobData || !mobData.isAlive) {
             return ["The threat has already been neutralized."];
         }
-        const mobData = mob[0];
         const messages = [];
         // Mob attacks obot-3
         const damage = this.rollDice(mobData.damage);
@@ -103,14 +102,7 @@ class GameEngine {
     async applySpecialAbility(mob, gameState) {
         switch (mob.specialAbility) {
             case 'acid_burn':
-                const burnEffect = {
-                    id: `acid_burn_${Date.now()}`,
-                    type: 'acid_burn',
-                    duration: 3,
-                    damage: 1,
-                    description: 'Corrosive acid continues eating through obot-3\'s plating'
-                };
-                await this.db.addCombatEffect(burnEffect);
+                await this.db.addCombatEffect(`acid_burn_${Date.now()}`, 'acid_burn', 'Corrosive acid continues eating through obot-3\'s plating', 3, 1);
                 return "🧪 Acid splashes across obot-3's chassis - ongoing corrosion detected!";
             case 'electrical_glitch':
                 if (Math.random() < 0.25) {
@@ -119,14 +111,8 @@ class GameEngine {
                 }
                 break;
             case 'attach_corrode':
-                const attachEffect = {
-                    id: `attached_${Date.now()}`,
-                    type: 'attached',
-                    duration: -1, // Must be manually removed
-                    damage: 1,
-                    description: 'Metallivorous bacteria attached to obot-3\'s frame'
-                };
-                await this.db.addCombatEffect(attachEffect);
+                await this.db.addCombatEffect(`attached_${Date.now()}`, 'attached', 'Metallivorous bacteria attached to obot-3\'s frame', -1, // Must be manually removed
+                1);
                 return "🦠 Bacteria swarm attaches to obot-3 - continuous metal corrosion detected!";
         }
         return null;
@@ -157,7 +143,7 @@ class GameEngine {
         // Clear all combat effects
         const effects = await this.db.getCombatEffects();
         for (const effect of effects) {
-            await this.db.updateCombatEffect(effect.id, 0);
+            await this.db.updateCombatEffectDuration(effect.id, 0);
         }
     }
     // Process ongoing combat effects
@@ -166,10 +152,10 @@ class GameEngine {
         const messages = [];
         for (const effect of effects) {
             if (effect.duration > 0) {
-                const newHealth = Math.max(0, gameState.health - effect.damage);
+                const newHealth = Math.max(0, gameState.health - effect.value);
                 await this.db.updateGameState({ health: newHealth });
-                await this.db.updateCombatEffect(effect.id, effect.duration - 1);
-                messages.push(`💢 ${effect.description} - obot-3 takes ${effect.damage} damage`);
+                await this.db.updateCombatEffectDuration(effect.id, effect.duration - 1);
+                messages.push(`💢 ${effect.description} - obot-3 takes ${effect.value} damage`);
                 if (newHealth <= 0) {
                     await this.enterMaintenanceMode(gameState);
                     messages.push("💀 Ongoing damage causes system failure - entering maintenance mode!");

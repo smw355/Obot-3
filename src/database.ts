@@ -1,5 +1,6 @@
-import * as sqlite3 from 'sqlite3';
-import { promisify } from 'util';
+import initSqlJs from 'sql.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface GameState {
   id: number;
@@ -29,10 +30,10 @@ export interface Item {
   name: string;
   description: string;
   weight: number;
-  type: string; // 'food', 'medicine', 'tool', 'weapon', 'energy', 'material'
-  value: number; // healing/energy/damage value
-  energyCost: number; // energy cost to use
-  location: string; // room_id or 'inventory' or 'dropped'
+  type: string;
+  value: number;
+  energyCost: number;
+  location: string;
 }
 
 export interface Mob {
@@ -41,19 +42,20 @@ export interface Mob {
   description: string;
   health: number;
   maxHealth: number;
-  damage: string; // dice notation like "1d6+2"
+  damage: string;
   damageType: string;
-  location: string; // room_id
+  location: string;
   isAlive: boolean;
-  specialAbility?: string;
+  specialAbility: string;
 }
 
 export interface CombatEffect {
   id: string;
-  type: string; // 'acid_burn', 'electrical_glitch', 'attached'
-  duration: number;
-  damage: number;
+  effectType: string;
   description: string;
+  duration: number;
+  value: number;
+  createdAt: string;
 }
 
 export interface BunkerInventory {
@@ -62,49 +64,29 @@ export interface BunkerInventory {
   quantity: number;
   type: string; // 'food', 'fuel', 'medicine', 'technology', 'defense'
   description: string;
-  survivalDays?: number; // How many days this extends survival
+  survivalDays?: number;
 }
 
 export class Database {
-  private db: sqlite3.Database;
-  public runAsync: (sql: string, params?: any[]) => Promise<any>;
-  private getAsync: (sql: string, params?: any[]) => Promise<any>;
-  public allAsync: (sql: string, params?: any[]) => Promise<any[]>;
+  private db: any;
+  private dbPath: string;
 
-  constructor(filename: string = 'obot3.db') {
-    this.db = new sqlite3.Database(filename);
-    
-    // Manually create promisified versions to avoid binding issues
-    this.runAsync = (sql: string, params?: any[]) => {
-      return new Promise((resolve, reject) => {
-        this.db.run(sql, params || [], function(err) {
-          if (err) reject(err);
-          else resolve(this);
-        });
-      });
-    };
-
-    this.getAsync = (sql: string, params?: any[]) => {
-      return new Promise((resolve, reject) => {
-        this.db.get(sql, params || [], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
-    };
-
-    this.allAsync = (sql: string, params?: any[]) => {
-      return new Promise((resolve, reject) => {
-        this.db.all(sql, params || [], (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        });
-      });
-    };
+  constructor() {
+    this.dbPath = path.join(process.cwd(), 'game.db');
   }
 
   async initialize(): Promise<void> {
-    await this.runAsync(`
+    const SQL = await initSqlJs();
+    
+    let buffer: Uint8Array | undefined;
+    if (fs.existsSync(this.dbPath)) {
+      buffer = fs.readFileSync(this.dbPath);
+    }
+    
+    this.db = new SQL.Database(buffer);
+
+    // Create tables
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS game_state (
         id INTEGER PRIMARY KEY,
         currentRoom TEXT NOT NULL,
@@ -117,34 +99,28 @@ export class Database {
         missionStarted BOOLEAN NOT NULL DEFAULT FALSE,
         createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+      );
 
-    await this.runAsync(`
       CREATE TABLE IF NOT EXISTS rooms (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT NOT NULL,
         discovered BOOLEAN NOT NULL DEFAULT FALSE,
-        exits TEXT NOT NULL DEFAULT '{}',
+        exits TEXT NOT NULL,
         cleared BOOLEAN NOT NULL DEFAULT FALSE
-      )
-    `);
+      );
 
-    await this.runAsync(`
       CREATE TABLE IF NOT EXISTS items (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT NOT NULL,
-        weight REAL NOT NULL DEFAULT 0,
+        weight REAL NOT NULL,
         type TEXT NOT NULL,
         value INTEGER NOT NULL DEFAULT 0,
         energyCost INTEGER NOT NULL DEFAULT 0,
         location TEXT NOT NULL
-      )
-    `);
+      );
 
-    await this.runAsync(`
       CREATE TABLE IF NOT EXISTS mobs (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -156,155 +132,217 @@ export class Database {
         location TEXT NOT NULL,
         isAlive BOOLEAN NOT NULL DEFAULT TRUE,
         specialAbility TEXT
-      )
-    `);
+      );
 
-    await this.runAsync(`
       CREATE TABLE IF NOT EXISTS combat_effects (
         id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
+        effectType TEXT NOT NULL,
+        description TEXT NOT NULL,
         duration INTEGER NOT NULL,
-        damage INTEGER NOT NULL,
-        description TEXT NOT NULL
-      )
-    `);
+        value INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
 
-    await this.runAsync(`
       CREATE TABLE IF NOT EXISTS bunker_inventory (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        quantity INTEGER NOT NULL DEFAULT 0,
+        quantity INTEGER NOT NULL DEFAULT 1,
         type TEXT NOT NULL,
         description TEXT NOT NULL,
-        survivalDays INTEGER DEFAULT NULL
-      )
+        survivalDays INTEGER
+      );
     `);
 
-    // Initialize default game state if none exists
-    const gameState = await this.getGameState();
-    if (!gameState) {
-      await this.createNewGame();
+    // Initialize default game state if it doesn't exist
+    const stmt = this.db.prepare('SELECT * FROM game_state WHERE id = 1');
+    const existingState = stmt.get();
+    if (!existingState) {
+      this.db.run(`
+        INSERT INTO game_state (id, currentRoom, health, energy, maxEnergy, carryingWeight, turnNumber, gameCompleted, missionStarted) 
+        VALUES (1, 'B01', 100, 100, 100, 0, 1, 0, 0)
+      `);
+    }
+    stmt.free();
+
+    this.saveDatabase();
+  }
+
+  private saveDatabase(): void {
+    const data = this.db.export();
+    fs.writeFileSync(this.dbPath, data);
+  }
+
+  async initializeBunkerSupplies(): Promise<void> {
+    const stmt = this.db.prepare('SELECT COUNT(*) as count FROM bunker_inventory');
+    const result = stmt.get();
+    const count = result ? result['COUNT(*)'] : 0;
+    stmt.free();
+    
+    if (count === 0) {
+      const supplies = [
+        ['emergency_rations', 'Emergency Rations', 3, 'food', 'Military-grade survival food packets', 2],
+        ['water_purification', 'Water Purification Tablets', 10, 'medicine', 'Chemical tablets for water sterilization', null],
+        ['backup_generator', 'Backup Generator', 1, 'fuel', 'Emergency power supply for critical systems', null]
+      ];
+
+      for (const supply of supplies) {
+        this.db.run(`
+          INSERT INTO bunker_inventory (id, name, quantity, type, description, survivalDays)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `, supply);
+      }
+      
+      this.saveDatabase();
     }
   }
 
-  async createNewGame(): Promise<void> {
-    // Clear existing game
-    await this.runAsync('DELETE FROM game_state');
-    await this.runAsync('DELETE FROM combat_effects');
-    
-    // Reset all rooms and items
-    await this.runAsync('UPDATE rooms SET discovered = FALSE, cleared = FALSE');
-    await this.runAsync('UPDATE items SET location = (SELECT location FROM items WHERE id = items.id LIMIT 1)'); // Reset to original locations
-    await this.runAsync('UPDATE mobs SET health = maxHealth, isAlive = TRUE');
-
-    // Create new game state
-    await this.runAsync(`
-      INSERT INTO game_state (id, currentRoom) 
-      VALUES (1, 'B01')
-    `);
-  }
-
   async getGameState(): Promise<GameState | null> {
-    return await this.getAsync('SELECT * FROM game_state WHERE id = 1');
+    const stmt = this.db.prepare('SELECT * FROM game_state WHERE id = 1');
+    const result = stmt.get();
+    stmt.free();
+    return result ? result : null;
   }
 
   async updateGameState(updates: Partial<GameState>): Promise<void> {
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
     const values = Object.values(updates);
     
-    await this.runAsync(`
+    this.db.run(`
       UPDATE game_state 
       SET ${fields}, updatedAt = CURRENT_TIMESTAMP 
       WHERE id = 1
     `, values);
+    
+    this.saveDatabase();
   }
 
   async getRoom(id: string): Promise<Room | null> {
-    return await this.getAsync('SELECT * FROM rooms WHERE id = ?', [id]);
+    const stmt = this.db.prepare('SELECT * FROM rooms WHERE id = ?');
+    const result = stmt.get([id]);
+    stmt.free();
+    return result ? result : null;
   }
 
   async discoverRoom(id: string): Promise<void> {
-    await this.runAsync('UPDATE rooms SET discovered = TRUE WHERE id = ?', [id]);
+    this.db.run('UPDATE rooms SET discovered = 1 WHERE id = ?', [id]);
+    this.saveDatabase();
   }
 
   async clearRoom(id: string): Promise<void> {
-    await this.runAsync('UPDATE rooms SET cleared = TRUE WHERE id = ?', [id]);
+    this.db.run('DELETE FROM mobs WHERE location = ?', [id]);
+    this.db.run('UPDATE rooms SET cleared = 1 WHERE id = ?', [id]);
+    this.saveDatabase();
   }
 
-  async updateRoomExits(id: string, exits: string): Promise<void> {
-    await this.runAsync('UPDATE rooms SET exits = ? WHERE id = ?', [exits, id]);
+  async updateRoomExits(roomId: string, exits: string): Promise<void> {
+    this.db.run('UPDATE rooms SET exits = ? WHERE id = ?', [exits, roomId]);
+    this.saveDatabase();
   }
 
   async getItemsInLocation(location: string): Promise<Item[]> {
-    return await this.allAsync('SELECT * FROM items WHERE location = ?', [location]);
+    const stmt = this.db.prepare('SELECT * FROM items WHERE location = ?');
+    const results: Item[] = [];
+    stmt.bind([location]);
+    while (stmt.step()) {
+      results.push(stmt.getAsObject() as Item);
+    }
+    stmt.free();
+    return results;
   }
 
   async moveItem(itemId: string, newLocation: string): Promise<void> {
-    await this.runAsync('UPDATE items SET location = ? WHERE id = ?', [newLocation, itemId]);
+    this.db.run('UPDATE items SET location = ? WHERE id = ?', [newLocation, itemId]);
+    this.saveDatabase();
   }
 
   async getMobsInLocation(location: string): Promise<Mob[]> {
-    return await this.allAsync('SELECT * FROM mobs WHERE location = ? AND isAlive = TRUE', [location]);
+    const stmt = this.db.prepare('SELECT * FROM mobs WHERE location = ? AND isAlive = 1');
+    const results: Mob[] = [];
+    stmt.bind([location]);
+    while (stmt.step()) {
+      results.push(stmt.getAsObject() as Mob);
+    }
+    stmt.free();
+    return results;
   }
 
-  async updateMobHealth(mobId: string, health: number): Promise<void> {
-    const isAlive = health > 0;
-    await this.runAsync(
-      'UPDATE mobs SET health = ?, isAlive = ? WHERE id = ?',
-      [health, isAlive, mobId]
-    );
+  async updateMobHealth(mobId: string, newHealth: number): Promise<void> {
+    if (newHealth <= 0) {
+      this.db.run('UPDATE mobs SET health = 0, isAlive = 0 WHERE id = ?', [mobId]);
+    } else {
+      this.db.run('UPDATE mobs SET health = ? WHERE id = ?', [newHealth, mobId]);
+    }
+    this.saveDatabase();
   }
 
-  async addCombatEffect(effect: CombatEffect): Promise<void> {
-    await this.runAsync(`
-      INSERT INTO combat_effects (id, type, duration, damage, description)
+  async getMob(mobId: string): Promise<Mob | null> {
+    const stmt = this.db.prepare('SELECT * FROM mobs WHERE id = ?');
+    const result = stmt.get([mobId]);
+    stmt.free();
+    return result ? result : null;
+  }
+
+  async addCombatEffect(id: string, effectType: string, description: string, duration: number, value: number = 0): Promise<void> {
+    this.db.run(`
+      INSERT INTO combat_effects (id, effectType, description, duration, value) 
       VALUES (?, ?, ?, ?, ?)
-    `, [effect.id, effect.type, effect.duration, effect.damage, effect.description]);
+    `, [id, effectType, description, duration, value]);
+    this.saveDatabase();
   }
 
   async getCombatEffects(): Promise<CombatEffect[]> {
-    return await this.allAsync('SELECT * FROM combat_effects WHERE duration > 0');
+    const stmt = this.db.prepare('SELECT * FROM combat_effects WHERE duration > 0');
+    const results: CombatEffect[] = [];
+    while (stmt.step()) {
+      results.push(stmt.getAsObject() as CombatEffect);
+    }
+    stmt.free();
+    return results;
   }
 
-  async updateCombatEffect(id: string, duration: number): Promise<void> {
-    if (duration <= 0) {
-      await this.runAsync('DELETE FROM combat_effects WHERE id = ?', [id]);
+  async updateCombatEffectDuration(id: string, newDuration: number): Promise<void> {
+    if (newDuration <= 0) {
+      this.db.run('DELETE FROM combat_effects WHERE id = ?', [id]);
     } else {
-      await this.runAsync('UPDATE combat_effects SET duration = ? WHERE id = ?', [duration, id]);
+      this.db.run('UPDATE combat_effects SET duration = ? WHERE id = ?', [newDuration, id]);
     }
+    this.saveDatabase();
   }
 
   async getBunkerInventory(): Promise<BunkerInventory[]> {
-    return await this.allAsync('SELECT * FROM bunker_inventory ORDER BY type, name');
-  }
-
-  async addToBunkerInventory(itemId: string, name: string, quantity: number, type: string, description: string, survivalDays?: number): Promise<void> {
-    await this.runAsync(`
-      INSERT OR REPLACE INTO bunker_inventory (id, name, quantity, type, description, survivalDays)
-      VALUES (?, ?, 
-        COALESCE((SELECT quantity FROM bunker_inventory WHERE id = ?), 0) + ?, 
-        ?, ?, ?)
-    `, [itemId, name, itemId, quantity, type, description, survivalDays || null]);
-  }
-
-  async initializeBunkerSupplies(): Promise<void> {
-    const existing = await this.allAsync('SELECT COUNT(*) as count FROM bunker_inventory');
-    if (existing[0].count === 0) {
-      // Initialize starting bunker supplies
-      await this.addToBunkerInventory('emergency_rations', 'Emergency Rations', 12, 'food', 'Basic survival food supply', 3);
-      await this.addToBunkerInventory('water_reserves', 'Water Reserves', 30, 'food', 'Clean water supply (days)', 10); 
-      await this.addToBunkerInventory('backup_generator_fuel', 'Generator Fuel', 5, 'fuel', 'Diesel fuel for emergency generator');
-      await this.addToBunkerInventory('medical_supplies', 'Medical Kit', 2, 'medicine', 'Basic medical supplies for treating injuries');
-      await this.addToBunkerInventory('air_filters', 'Air Filtration Filters', 4, 'defense', 'HEPA filters for bunker air system');
+    const stmt = this.db.prepare('SELECT * FROM bunker_inventory ORDER BY type, name');
+    const results: BunkerInventory[] = [];
+    while (stmt.step()) {
+      results.push(stmt.getAsObject() as BunkerInventory);
     }
+    stmt.free();
+    return results;
   }
 
-  async close(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.close((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+  async addToBunkerInventory(id: string, name: string, quantity: number, type: string, description: string, survivalDays?: number): Promise<void> {
+    const stmt = this.db.prepare('SELECT * FROM bunker_inventory WHERE name = ?');
+    const existing = stmt.get([name]);
+    stmt.free();
+    
+    if (existing) {
+      this.db.run('UPDATE bunker_inventory SET quantity = quantity + ? WHERE name = ?', [quantity, name]);
+    } else {
+      this.db.run(`
+        INSERT INTO bunker_inventory (id, name, quantity, type, description, survivalDays)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [id, name, quantity, type, description, survivalDays || null]);
+    }
+    this.saveDatabase();
+  }
+
+  // Helper method for compatibility with existing code
+  async runAsync(sql: string, params: any[] = []): Promise<any> {
+    try {
+      this.db.run(sql, params);
+      this.saveDatabase();
+      return { changes: 1 }; // Simplified return for compatibility
+    } catch (error) {
+      throw error;
+    }
   }
 }
