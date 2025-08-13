@@ -155,7 +155,7 @@ export class Database {
 
     // Initialize default game state if it doesn't exist
     const stmt = this.db.prepare('SELECT * FROM game_state WHERE id = 1');
-    const existingState = stmt.get();
+    const existingState = stmt.step() ? stmt.getAsObject() : null;
     if (!existingState) {
       this.db.run(`
         INSERT INTO game_state (id, currentRoom, health, energy, maxEnergy, carryingWeight, turnNumber, gameCompleted, missionStarted) 
@@ -174,8 +174,7 @@ export class Database {
 
   async initializeBunkerSupplies(): Promise<void> {
     const stmt = this.db.prepare('SELECT COUNT(*) as count FROM bunker_inventory');
-    const result = stmt.get();
-    const count = result ? result['COUNT(*)'] : 0;
+    const count = stmt.step() ? stmt.get()[0] : 0;
     stmt.free();
     
     if (count === 0) {
@@ -198,9 +197,9 @@ export class Database {
 
   async getGameState(): Promise<GameState | null> {
     const stmt = this.db.prepare('SELECT * FROM game_state WHERE id = 1');
-    const result = stmt.get();
+    const result = stmt.step() ? stmt.getAsObject() as GameState : null;
     stmt.free();
-    return result ? result : null;
+    return result;
   }
 
   async updateGameState(updates: Partial<GameState>): Promise<void> {
@@ -218,9 +217,10 @@ export class Database {
 
   async getRoom(id: string): Promise<Room | null> {
     const stmt = this.db.prepare('SELECT * FROM rooms WHERE id = ?');
-    const result = stmt.get([id]);
+    stmt.bind([id]);
+    const result = stmt.step() ? stmt.getAsObject() as Room : null;
     stmt.free();
-    return result ? result : null;
+    return result;
   }
 
   async discoverRoom(id: string): Promise<void> {
@@ -277,9 +277,10 @@ export class Database {
 
   async getMob(mobId: string): Promise<Mob | null> {
     const stmt = this.db.prepare('SELECT * FROM mobs WHERE id = ?');
-    const result = stmt.get([mobId]);
+    stmt.bind([mobId]);
+    const result = stmt.step() ? stmt.getAsObject() as Mob : null;
     stmt.free();
-    return result ? result : null;
+    return result;
   }
 
   async addCombatEffect(id: string, effectType: string, description: string, duration: number, value: number = 0): Promise<void> {
@@ -321,7 +322,8 @@ export class Database {
 
   async addToBunkerInventory(id: string, name: string, quantity: number, type: string, description: string, survivalDays?: number): Promise<void> {
     const stmt = this.db.prepare('SELECT * FROM bunker_inventory WHERE name = ?');
-    const existing = stmt.get([name]);
+    stmt.bind([name]);
+    const existing = stmt.step() ? stmt.getAsObject() : null;
     stmt.free();
     
     if (existing) {
@@ -330,7 +332,7 @@ export class Database {
       this.db.run(`
         INSERT INTO bunker_inventory (id, name, quantity, type, description, survivalDays)
         VALUES (?, ?, ?, ?, ?, ?)
-      `, [id, name, quantity, type, description, survivalDays || null]);
+      `, [id, name, quantity, type, description, survivalDays === undefined ? null : survivalDays]);
     }
     this.saveDatabase();
   }

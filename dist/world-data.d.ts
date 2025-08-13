@@ -157,7 +157,7 @@ export declare const BASEMENT_ITEMS: {
     energyCost: number;
     location: string;
 }[];
-export declare const BASEMENT_MOBS: ({
+export declare const BASEMENT_MOBS: {
     id: string;
     name: string;
     description: string;
@@ -168,18 +168,7 @@ export declare const BASEMENT_MOBS: ({
     location: string;
     isAlive: boolean;
     specialAbility: string;
-} | {
-    id: string;
-    name: string;
-    description: string;
-    health: number;
-    maxHealth: number;
-    damage: string;
-    damageType: string;
-    location: string;
-    isAlive: boolean;
-    specialAbility?: undefined;
-})[];
+}[];
 export declare const BASEMENT_HAZARDS: {
     B03: {
         name: string;

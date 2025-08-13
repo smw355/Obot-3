@@ -146,7 +146,7 @@ exports.BASEMENT_MOBS = [
     // Scrap Crawler (bacteria swarm) - Sub-basement Access
     { id: "scrap_crawler_001", name: "Scrap Crawler", description: "A writhing mass of metallivorous bacteria that consumes metal on contact", health: 12, maxHealth: 12, damage: "1d3", damageType: "corrosion", location: "B14", isAlive: true, specialAbility: "attach_corrode" },
     // Feral Survivor - Storage Unit C (ransacked area)
-    { id: "feral_survivor_001", name: "Feral Survivor", description: "A contaminated human wielding a makeshift crowbar, eyes glowing with radiation sickness", health: 25, maxHealth: 25, damage: "1d8+3", damageType: "physical", location: "B08", isAlive: true },
+    { id: "feral_survivor_001", name: "Feral Survivor", description: "A contaminated human wielding a makeshift crowbar, eyes glowing with radiation sickness", health: 25, maxHealth: 25, damage: "1d8+3", damageType: "physical", location: "B08", isAlive: true, specialAbility: "" },
     // Rogue Maintenance Bot - Workshop (guarding the plasma torch)
     { id: "rogue_bot_001", name: "Rogue Maintenance Bot", description: "A malfunctioned cleaning unit with hydraulic crusher arms, sparks flying from damaged circuits", health: 45, maxHealth: 45, damage: "2d6+4", damageType: "crushing", location: "B15", isAlive: true, specialAbility: "grapple" }
 ];
