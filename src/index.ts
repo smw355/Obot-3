@@ -134,10 +134,17 @@ class Obot3Server {
           },
           {
             name: 'use_plasma_torch',
-            description: 'Use the plasma torch to cut through the sealed door and access upper levels',
+            description: 'Use the plasma torch to cut through sealed barriers (specify "up" for main lobby or "down" for sub-basement)',
             inputSchema: {
               type: 'object',
-              properties: {},
+              properties: {
+                direction: {
+                  type: 'string',
+                  description: 'Direction to cut: "up" for main lobby, "down" for sub-basement tunnels',
+                  enum: ['up', 'down'],
+                },
+              },
+              required: ['direction'],
             },
           },
         ] as Tool[],
@@ -168,7 +175,7 @@ class Obot3Server {
           case 'bunker_status':
             return await this.handleBunkerStatus();
           case 'use_plasma_torch':
-            return await this.handleUsePlasmaTorch();
+            return await this.handleUsePlasmaTorch(args?.direction as string);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -194,7 +201,7 @@ class Obot3Server {
       return {
         content: [{ 
           type: 'text', 
-          text: `🤖 obot-3 is already active. Current location: ${gameState.currentRoom}\n\nUse the 'explore' command to scan your surroundings or 'status' to check obot-3's condition.` 
+          text: `🤖 **OBOT-3 ONLINE** - Systems already active. Current location: ${gameState.currentRoom}\n\nCommander, I'm ready for orders. Use 'explore' to scan my surroundings or 'status' to check my operational status.` 
         }],
       };
     }
@@ -202,60 +209,60 @@ class Obot3Server {
     // Mark mission as started
     await this.db.updateGameState({ missionStarted: true });
 
-    const storyIntro = `🏢 **OBOT-3 EXPLORATION MISSION - INITIATED**
+    const storyIntro = `🤖 **OBOT-3 ACTIVATION SEQUENCE INITIATED**
 
 📅 **Day 12 After the Incident**
-📍 **Location:** Underground Bunker, Downtown Los Angeles
-⚠️  **Surface Status:** CONTAMINATED - LETHAL RADIATION LEVELS
+📍 **Current Location:** Storage Unit A (Basement Level)
+⚠️  **Radiation Status:** LETHAL LEVELS DETECTED ON SURFACE
 
 ---
 
-**MISSION BRIEFING:**
+**OBOT-3 SYSTEM STATUS:**
 
-Twelve days ago, the Prometheus Antimatter Research Facility suffered a catastrophic containment failure. The resulting explosion created a deadly radiation zone spanning most of downtown LA. You managed to reach this emergency bunker beneath an apartment building just in time, but supplies are running critically low.
+🤖 Greetings, Commander. I am OBOT-3, your 4-foot reconnaissance unit.
 
-Your only hope for survival lies with **obot-3** - your 4-foot tall reconnaissance robot. While you remain safely in the bunker's shielded command center, obot-3 can venture into the contaminated areas to scavenge for supplies and gather intelligence about the situation above.
+My records indicate it has been 12 days since the Prometheus Antimatter Research Facility containment failure. The resulting explosion has rendered most of downtown LA lethally radioactive. While you remain safely in our shielded bunker command center, I can venture into the contaminated zones to gather supplies and intelligence.
 
-**ROBOT SPECIFICATIONS:**
-- Height: 4 feet (child-sized for navigating debris)
-- Health: 100/100 (self-repair capable but limited)
-- Energy: 100/100 (rechargeable, expandable with upgrades)
-- Carrying Capacity: 30 lbs maximum (servos will malfunction if exceeded)
-- Sensors: Visual/Audio detection, environmental analysis
-- Limbs: Articulated arms with grasping manipulators
+**MY CURRENT SPECIFICATIONS:**
+- Chassis: 4-foot frame optimized for debris navigation
+- Health: 100/100 (self-repair systems functional but limited)
+- Energy: 100/100 (rechargeable via power cells)
+- Carrying Capacity: 30 lbs maximum (servo overload protection engaged)
+- Sensors: Visual/audio detection, environmental analysis suite
+- Manipulators: Dual articulated arms with precision grasping capability
 
-**PRIMARY OBJECTIVES:**
-1. Explore the building's basement level for supplies
+**MISSION OBJECTIVES I'VE BEEN PROGRAMMED FOR:**
+1. Explore this building's basement level for critical supplies
 2. Locate food, medicine, tools, and energy sources
-3. **Return supplies to the bunker** to extend your survival
-4. Find weapons and upgrades to improve obot-3's effectiveness
-5. Locate the plasma torch to access upper building levels
+3. **Return all supplies to you via the bunker access** 
+4. Acquire weapons and upgrades to improve my operational effectiveness
+5. Locate the plasma torch to breach sealed barriers to upper levels
 
-**SUPPLY CHAIN CRITICAL:**
-- Use 'return_to_bunker' to deliver collected items to bunker storage
-- Food extends your survival time (currently ~1 year of emergency supplies)
-- Weapons and tools improve obot-3's combat effectiveness
-- Use 'bunker_status' to monitor your survival situation
+**SUPPLY LOGISTICS PROTOCOL:**
+- I will use 'return_to_bunker' to deliver collected items to your storage
+- Food extends your survival time (current emergency supplies: ~1 year)
+- Weapons and tools will enhance my combat effectiveness
+- Use 'bunker_status' to monitor our survival situation
 
-**ITEM COMPATIBILITY:**
-- **Robot items:** Energy cells, repair kits, weapons, armor plating
-- **Human items:** Food, water, medicine, survival gear (for bunker storage)
-- obot-3 cannot consume organic matter but can deliver it to you
+**ITEM COMPATIBILITY MATRIX:**
+- **Robot-compatible:** Energy cells, repair kits, weapons, armor plating
+- **Human-compatible:** Food, water, medicine, survival gear (for your bunker storage)
+- Note: I cannot consume organic matter, but I will deliver it to you
 
-**WARNING:** The basement contains hostile mutants, environmental hazards, and structural dangers. obot-3 can be damaged or destroyed - manage health carefully!
+⚠️  **DANGER ASSESSMENT:** This basement contains hostile mutants, environmental hazards, and structural dangers. My systems can be damaged or destroyed - please manage my health carefully, Commander.
 
 ---
 
-🤖 **obot-3 ONLINE** - All systems nominal
-📡 **Uplink Established** - Remote control active  
-📍 **Current Position:** Storage Unit A (Basement Level)
+🤖 **OBOT-3 SYSTEMS: FULLY OPERATIONAL**
+📡 **Command Uplink: ESTABLISHED**  
+🔋 **All systems nominal - awaiting your orders**
 
-**ESSENTIAL COMMANDS:**
-- 'explore' - Scan current area for items, threats, and exits
-- 'bunker_status' - Check survival supplies and time remaining
-- 'return_to_bunker' - Deliver collected supplies and return safely
+**AVAILABLE COMMAND PROTOCOLS:**
+- 'explore' - I will scan my current area for items, threats, and exits
+- 'bunker_status' - I will report on your survival supplies and time remaining
+- 'return_to_bunker' - I will return to deliver supplies and recharge
 
-**Remember:** Every supply delivered could mean the difference between survival and becoming another casualty of the Prometheus Incident...`;
+Commander, every supply I deliver could mean the difference between your survival and becoming another casualty of the Prometheus Incident. I await your orders.`;
 
     return {
       content: [{ type: 'text', text: storyIntro }],
@@ -270,7 +277,7 @@ Your only hope for survival lies with **obot-3** - your 4-foot tall reconnaissan
       return {
         content: [{ 
           type: 'text', 
-          text: `🚫 Mission not yet initiated. Use 'start_mission' first to begin the obot-3 exploration protocol and receive your briefing.` 
+          text: `🚫 Commander, my systems are not yet activated. Please use 'start_mission' first to initialize my exploration protocols.` 
         }],
       };
     }
@@ -292,29 +299,29 @@ Your only hope for survival lies with **obot-3** - your 4-foot tall reconnaissan
       const damage = this.engine.rollDice(hazard.damage);
       const newHealth = Math.max(0, gameState.health - damage);
       await this.db.updateGameState({ health: newHealth });
-      hazardMessage = `\n⚠️  ${hazard.name}: ${hazard.description} - obot-3 takes ${damage} ${hazard.damageType} damage!`;
+      hazardMessage = `\n⚠️  **HAZARD DETECTED:** ${hazard.name} - ${hazard.description} I've sustained ${damage} ${hazard.damageType} damage!`;
     }
 
     // Process ongoing combat effects
     const effectMessages = await this.engine.processCombatEffects(gameState);
 
-    let description = `🤖 **OBOT-3 EXPLORATION REPORT**\n\n`;
-    description += `📍 **Location:** ${roomData.name}\n`;
-    description += `📝 **Description:** ${roomData.description}\n\n`;
+    let description = `🤖 **SCANNING CURRENT AREA...**\n\n`;
+    description += `📍 **My Current Location:** ${roomData.name}\n`;
+    description += `🔍 **Visual Analysis:** ${roomData.description}\n\n`;
 
     if (Object.keys(roomData.exits).length > 0) {
-      description += `🚪 **Available Exits:**\n`;
+      description += `🚪 **Exit Routes I Can Access:**\n`;
       for (const [direction, roomId] of Object.entries(roomData.exits)) {
         const exitRoom = BASEMENT_ROOMS[roomId as keyof typeof BASEMENT_ROOMS];
         const discovered = await this.db.getRoom(roomId);
-        const roomName = discovered?.discovered ? exitRoom.name : 'Unknown area';
+        const roomName = discovered?.discovered ? exitRoom.name : 'Unexplored area';
         description += `  • ${direction}: ${roomName}\n`;
       }
       description += '\n';
     }
 
     if (items.length > 0) {
-      description += `📦 **Items Detected:**\n`;
+      description += `📦 **Items My Sensors Have Located:**\n`;
       items.forEach(item => {
         description += `  • ${item.name} (${item.weight}lbs) - ${item.description}\n`;
       });
@@ -322,7 +329,7 @@ Your only hope for survival lies with **obot-3** - your 4-foot tall reconnaissan
     }
 
     if (mobs.length > 0) {
-      description += `⚠️  **Hostiles Detected:**\n`;
+      description += `⚠️  **THREAT DETECTION ALERT:**\n`;
       mobs.forEach(mob => {
         description += `  • ${mob.name} (${mob.health}/${mob.maxHealth} HP) - ${mob.description}\n`;
       });
@@ -756,7 +763,7 @@ Your only hope for survival lies with **obot-3** - your 4-foot tall reconnaissan
     };
   }
 
-  private async handleUsePlasmaTorch() {
+  private async handleUsePlasmaTorch(direction?: string) {
     const gameState = await this.db.getGameState();
     if (!gameState) throw new Error('Game not initialized');
 
@@ -783,6 +790,13 @@ Your only hope for survival lies with **obot-3** - your 4-foot tall reconnaissan
       };
     }
 
+    // Check direction parameter
+    if (!direction || (direction !== 'up' && direction !== 'down')) {
+      return {
+        content: [{ type: 'text', text: `🚫 Must specify direction: use_plasma_torch with "up" (main lobby) or "down" (sub-basement tunnels)` }],
+      };
+    }
+
     // Check energy cost
     if (gameState.energy < 15) {
       return {
@@ -790,31 +804,57 @@ Your only hope for survival lies with **obot-3** - your 4-foot tall reconnaissan
       };
     }
 
-    // Use plasma torch and open exit to upper levels
+    // Use plasma torch
     await this.db.updateGameState({
       energy: gameState.energy - 15,
       turnNumber: gameState.turnNumber + 3
     });
 
-    // Add "up" exit to workshop
-    const workshopExits = { west: "B14", north: "B12", up: "F01" };
-    await this.db.updateRoomExits('B15', JSON.stringify(workshopExits));
+    let response: string;
+    let workshopExits: any;
 
-    const response = `🔥 **PLASMA TORCH ACTIVATED**
+    if (direction === 'up') {
+      // Cut through to main lobby
+      workshopExits = { west: "B14", north: "B12", up: "LOBBY" };
+      await this.db.updateRoomExits('B15', JSON.stringify(workshopExits));
+      
+      response = `🔥 **PLASMA TORCH ACTIVATED - CUTTING UPWARD**
 
-⚡ High-energy plasma beam ignites with a brilliant blue-white glow...
-🔨 Cutting through the warped steel door frame...
-💨 Molten metal drips and hisses as it cools...
+⚡ High-energy plasma beam ignites with brilliant blue-white intensity...
+🔨 Cutting through the warped steel door leading to the main lobby...
+💨 Molten metal drips and hisses as barriers melt away...
 
-🚪 **SUCCESS!** The sealed door has been cut open!
+🚪 **SUCCESS!** Path to the main lobby is clear!
 
-📍 **NEW AREA ACCESSIBLE:** Stairwell to Upper Levels
-🆙 A stairway leading upward is now visible beyond the melted barrier.
+🏢 **NEW AREA ACCESSIBLE:** Main Lobby
+🆙 A stairway leading up to the building's main floor awaits.
 
-✅ Use 'move up' to access the building's first floor
-✅ Or use 'return_to_bunker' to deliver supplies before exploring further
+✅ Use 'move up' to access the lobby and potentially escape the building
+✅ Or use 'return_to_bunker' to deliver supplies before venturing to the surface
 
-⚠️  **WARNING:** Upper levels may contain greater dangers and challenges.`;
+⚠️  **WARNING:** The lobby may be heavily contaminated with radiation!`;
+
+    } else {
+      // Cut through to sub-basement
+      workshopExits = { west: "B14", north: "B12", down: "TUNNELS" };
+      await this.db.updateRoomExits('B15', JSON.stringify(workshopExits));
+      
+      response = `🔥 **PLASMA TORCH ACTIVATED - CUTTING DOWNWARD**
+
+⚡ High-energy plasma beam cuts through the heavy maintenance hatch...
+🔨 Metal sparks fly as the sealed passage opens...
+💨 Cool air rushes up from the depths below...
+
+🚪 **SUCCESS!** Access to sub-basement tunnels secured!
+
+🕳️ **NEW AREA ACCESSIBLE:** Sub-Basement Tunnel System
+⬇️ Dark tunnels leading to adjacent buildings stretch into the distance.
+
+✅ Use 'move down' to explore the tunnel network
+✅ Or use 'return_to_bunker' to prepare for extended underground exploration
+
+⚠️  **WARNING:** Unknown dangers lurk in the tunnel depths!`;
+    }
 
     return {
       content: [{ type: 'text', text: response }],

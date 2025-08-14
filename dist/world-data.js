@@ -3,10 +3,16 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BASEMENT_HAZARDS = exports.BASEMENT_MOBS = exports.BASEMENT_ITEMS = exports.BASEMENT_ROOMS = void 0;
 exports.BASEMENT_ROOMS = {
+    "BUNKER": {
+        name: "Command Bunker",
+        description: "Your shielded underground command center. Banks of monitors show radiation readings from the surface. Emergency supplies line the reinforced walls. This is where you remain safe while controlling obot-3 remotely.",
+        exits: { down: "B01" },
+        cleared: true
+    },
     "B01": {
         name: "Storage Unit A",
-        description: "A cramped storage unit filled with dust-covered boxes and old furniture. The air smells of mildew and decay. Weak light filters through a grimy window near the ceiling.",
-        exits: { east: "B02", south: "B05" },
+        description: "A cramped storage unit filled with dust-covered boxes and old furniture. The air smells of mildew and decay. Weak light filters through a grimy window near the ceiling. A reinforced door marked 'BUNKER ACCESS' leads up to your command center.",
+        exits: { east: "B02", south: "B05", up: "BUNKER" },
         cleared: false
     },
     "B02": {
@@ -89,7 +95,7 @@ exports.BASEMENT_ROOMS = {
     },
     "B15": {
         name: "Workshop",
-        description: "A well-equipped workshop with workbenches, tool racks, and various pieces of machinery. This appears to be where the building's maintenance work was done. A massive steel door blocks the far end of the room, its frame warped and sealed shut by some past catastrophe. On the main workbench, a plasma torch sits waiting - the key to cutting through that barrier and reaching the upper levels.",
+        description: "A well-equipped workshop with workbenches, tool racks, and various pieces of machinery. This appears to be where the building's maintenance work was done. Two sealed barriers block your path: a warped steel door leading up to the main lobby, and a heavy maintenance hatch leading down to the sub-basement tunnel system. On the main workbench, a plasma torch sits waiting - the key to cutting through these barriers.",
         exits: { west: "B14", north: "B12" },
         cleared: false
     }

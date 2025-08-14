@@ -1,10 +1,19 @@
 export declare const BASEMENT_ROOMS: {
+    BUNKER: {
+        name: string;
+        description: string;
+        exits: {
+            down: string;
+        };
+        cleared: boolean;
+    };
     B01: {
         name: string;
         description: string;
         exits: {
             east: string;
             south: string;
+            up: string;
         };
         cleared: boolean;
     };
