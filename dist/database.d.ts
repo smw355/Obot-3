@@ -8,6 +8,11 @@ export interface GameState {
     turnNumber: number;
     gameCompleted: boolean;
     missionStarted: boolean;
+    daysSinceIncident: number;
+    bunkerFood: number;
+    bunkerWater: number;
+    bunkerEnergy: number;
+    inCombat: boolean;
     createdAt: string;
     updatedAt: string;
 }
@@ -40,6 +45,8 @@ export interface Mob {
     location: string;
     isAlive: boolean;
     specialAbility: string;
+    detectChance: number;
+    combatStyle: string;
 }
 export interface CombatEffect {
     id: string;
@@ -80,6 +87,15 @@ export declare class Database {
     updateCombatEffectDuration(id: string, newDuration: number): Promise<void>;
     getBunkerInventory(): Promise<BunkerInventory[]>;
     addToBunkerInventory(id: string, name: string, quantity: number, type: string, description: string, survivalDays?: number): Promise<void>;
+    removeBunkerItem(itemId: string, quantity?: number): Promise<boolean>;
     runAsync(sql: string, params?: any[]): Promise<any>;
+    advanceDay(daysToAdvance?: number): Promise<void>;
+    addBunkerResource(resource: 'food' | 'water' | 'energy', amount: number): Promise<void>;
+    getBunkerResources(): Promise<{
+        food: number;
+        water: number;
+        energy: number;
+        daysSinceIncident: number;
+    }>;
 }
 //# sourceMappingURL=database.d.ts.map

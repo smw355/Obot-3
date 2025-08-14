@@ -1,4 +1,5 @@
 import { Database, GameState, Item, Mob, CombatEffect } from './database.js';
+import { BASEMENT_ROOMS } from './world-data.js';
 
 export class GameEngine {
   private db: Database;
@@ -90,6 +91,14 @@ export class GameEngine {
 
     await this.db.updateGameState({ health: newHealth });
 
+    // Check for energy-based automatic retreat first
+    if (gameState.energy <= 5) {
+      messages.push("⚡ EMERGENCY ENERGY RETREAT: Power reserves critical - automatic withdrawal initiated!");
+      await this.attemptEnergyRetreat(gameState);
+      messages.push("🤖 obot-3 disengages from combat to preserve remaining power systems.");
+      return messages;
+    }
+
     // Check if obot-3 is critically damaged
     if (newHealth <= 20) {
       messages.push("🔋 WARNING: obot-3 is critically damaged and attempting to flee!");
@@ -152,7 +161,10 @@ export class GameEngine {
       if (exitKeys.length > 0) {
         const randomExit = exitKeys[Math.floor(Math.random() * exitKeys.length)];
         const newRoom = exits[randomExit];
-        await this.db.updateGameState({ currentRoom: newRoom });
+        await this.db.updateGameState({ 
+          currentRoom: newRoom,
+          inCombat: false // Clear combat state when fleeing
+        });
       }
     }
   }
@@ -259,6 +271,39 @@ export class GameEngine {
     }
 
     return messages;
+  }
+
+  private async attemptEnergyRetreat(gameState: GameState): Promise<void> {
+    // Energy retreat - try to move toward bunker or to a safer adjacent room
+    const currentRoom = gameState.currentRoom;
+    const roomData = BASEMENT_ROOMS[currentRoom as keyof typeof BASEMENT_ROOMS];
+    
+    if (!roomData) return;
+    
+    // Prefer moving toward bunker (B01) or to BUNKER if available
+    const exits = Object.entries(roomData.exits);
+    let retreatRoom = null;
+    
+    // Priority: BUNKER > B01 > any room closer to bunker > random room
+    for (const [direction, roomId] of exits) {
+      if (roomId === 'BUNKER' || roomId === 'B01') {
+        retreatRoom = roomId;
+        break;
+      }
+    }
+    
+    // If no direct path to bunker, pick first available exit
+    if (!retreatRoom && exits.length > 0) {
+      retreatRoom = exits[0][1];
+    }
+    
+    if (retreatRoom) {
+      await this.db.updateGameState({ 
+        currentRoom: retreatRoom,
+        turnNumber: gameState.turnNumber + 1,
+        inCombat: false // Clear combat state when retreating
+      });
+    }
   }
 
   // Calculate robot's attack damage including weapon bonuses

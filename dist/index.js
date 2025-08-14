@@ -125,6 +125,22 @@ class Obot3Server {
                         },
                     },
                     {
+                        name: 'purify_water',
+                        description: 'Use purification tablets to convert raw water into drinkable water',
+                        inputSchema: {
+                            type: 'object',
+                            properties: {},
+                        },
+                    },
+                    {
+                        name: 'rest_and_recharge',
+                        description: 'Rest overnight to fully recharge energy (only at bunker) - advances 1 day',
+                        inputSchema: {
+                            type: 'object',
+                            properties: {},
+                        },
+                    },
+                    {
                         name: 'use_plasma_torch',
                         description: 'Use the plasma torch to cut through sealed barriers (specify "up" for main lobby or "down" for sub-basement)',
                         inputSchema: {
@@ -145,30 +161,51 @@ class Obot3Server {
         this.server.setRequestHandler(types_js_1.CallToolRequestSchema, async (request) => {
             try {
                 const { name, arguments: args } = request.params;
+                let result;
                 switch (name) {
                     case 'start_mission':
-                        return await this.handleStartMission();
+                        result = await this.handleStartMission();
+                        break;
                     case 'explore':
-                        return await this.handleExplore();
+                        result = await this.handleExplore();
+                        break;
                     case 'move':
-                        return await this.handleMove(args?.direction);
+                        result = await this.handleMove(args?.direction);
+                        break;
                     case 'interact':
-                        return await this.handleInteract(args?.target, args?.action);
+                        result = await this.handleInteract(args?.target, args?.action);
+                        break;
                     case 'inventory':
-                        return await this.handleInventory();
+                        result = await this.handleInventory();
+                        break;
                     case 'status':
-                        return await this.handleStatus();
+                        result = await this.handleStatus();
+                        break;
                     case 'rest':
-                        return await this.handleRest(args?.duration);
+                        result = await this.handleRest(args?.duration);
+                        break;
                     case 'return_to_bunker':
-                        return await this.handleReturnToBunker();
+                        result = await this.handleReturnToBunker();
+                        break;
                     case 'bunker_status':
-                        return await this.handleBunkerStatus();
+                        result = await this.handleBunkerStatus();
+                        break;
+                    case 'purify_water':
+                        result = await this.handlePurifyWater();
+                        break;
+                    case 'rest_and_recharge':
+                        result = await this.handleRestAndRecharge();
+                        break;
                     case 'use_plasma_torch':
-                        return await this.handleUsePlasmaTorch(args?.direction);
+                        result = await this.handleUsePlasmaTorch(args?.direction);
+                        break;
                     default:
                         throw new Error(`Unknown tool: ${name}`);
                 }
+                // Ensure we always return a valid response
+                return result || {
+                    content: [{ type: 'text', text: 'Command completed successfully' }],
+                };
             }
             catch (error) {
                 return {
@@ -226,11 +263,16 @@ My records indicate it has been 12 days since the Prometheus Antimatter Research
 4. Acquire weapons and upgrades to improve my operational effectiveness
 5. Locate the plasma torch to breach sealed barriers to upper levels
 
+**BUNKER LIFE SUPPORT STATUS:**
+- Food: 7 days remaining (daily consumption: 1 unit)  
+- Water: 10 days remaining (daily consumption: 1 unit)
+- Energy: 15 days remaining (daily consumption: 1 unit, plus Obot-3 recharging)
+
 **SUPPLY LOGISTICS PROTOCOL:**
 - I will use 'return_to_bunker' to deliver collected items to your storage
-- Food extends your survival time (current emergency supplies: ~1 year)
-- Weapons and tools will enhance my combat effectiveness
-- Use 'bunker_status' to monitor our survival situation
+- Food/water/energy items extend your survival time beyond current reserves
+- Weapons and tools will enhance my combat effectiveness  
+- Use 'bunker_status' to monitor critical resource levels and time remaining
 
 **ITEM COMPATIBILITY MATRIX:**
 - **Robot-compatible:** Energy cells, repair kits, weapons, armor plating
@@ -267,6 +309,13 @@ Commander, every supply I deliver could mean the difference between your surviva
                     }],
             };
         }
+        // Check if we have enough energy for exploration
+        const exploreCost = 3;
+        if (gameState.energy < exploreCost) {
+            return await this.handleEnergyDepleted(gameState);
+        }
+        // Consume energy for exploration
+        await this.db.updateGameState({ energy: gameState.energy - exploreCost });
         await this.db.discoverRoom(gameState.currentRoom);
         const room = await this.db.getRoom(gameState.currentRoom);
         const roomData = world_data_js_1.BASEMENT_ROOMS[gameState.currentRoom];
@@ -275,6 +324,14 @@ Commander, every supply I deliver could mean the difference between your surviva
         // Get items in the room
         const items = await this.db.getItemsInLocation(gameState.currentRoom);
         const mobs = await this.db.getMobsInLocation(gameState.currentRoom);
+        // Check for enemy detection while exploring (only if not already in combat)
+        if (mobs.length > 0 && !gameState.inCombat) {
+            const detectionResult = await this.checkRoomDetection(mobs);
+            if (detectionResult.detected) {
+                // Combat triggered during exploration
+                return detectionResult.combatResponse;
+            }
+        }
         // Check for environmental hazards
         let hazardMessage = '';
         const hazard = world_data_js_1.BASEMENT_HAZARDS[gameState.currentRoom];
@@ -307,11 +364,13 @@ Commander, every supply I deliver could mean the difference between your surviva
             description += '\n';
         }
         if (mobs.length > 0) {
-            description += `⚠️  **THREAT DETECTION ALERT:**\n`;
+            description += `👁️ **STEALTH MODE - HOSTILE CONTACTS:**\n`;
             mobs.forEach(mob => {
-                description += `  • ${mob.name} (${mob.health}/${mob.maxHealth} HP) - ${mob.description}\n`;
+                const alertLevel = mob.detectChance >= 0.8 ? 'HIGH ALERT' : mob.detectChance >= 0.6 ? 'ALERT' : 'LOW ALERT';
+                description += `  • ${mob.name} (${mob.health}/${mob.maxHealth} HP) - Detection Risk: ${alertLevel}\n`;
+                description += `    ${mob.description}\n`;
             });
-            description += '\n';
+            description += '\n🤖 **TACTICAL ADVISORY**: Hostiles haven\'t detected me yet. I can attempt stealth actions or prepare for combat.\n\n';
         }
         if (hazardMessage) {
             description += hazardMessage;
@@ -333,6 +392,11 @@ Commander, every supply I deliver could mean the difference between your surviva
                 content: [{ type: 'text', text: `🚫 Mission not yet initiated. Use 'start_mission' first.` }],
             };
         }
+        // Check if we have enough energy for movement
+        const moveCost = 2;
+        if (gameState.energy < moveCost) {
+            return await this.handleEnergyDepleted(gameState);
+        }
         const roomData = world_data_js_1.BASEMENT_ROOMS[gameState.currentRoom];
         if (!roomData)
             throw new Error('Invalid current room');
@@ -342,17 +406,41 @@ Commander, every supply I deliver could mean the difference between your surviva
                 content: [{ type: 'text', text: `No exit to the ${direction} from this location.` }],
             };
         }
-        // Check for combat - if there are living mobs, obot-3 cannot leave
-        const mobs = await this.db.getMobsInLocation(gameState.currentRoom);
-        if (mobs.length > 0) {
-            return {
-                content: [{ type: 'text', text: `🚫 Cannot move - hostiles are blocking the way! You must deal with the threat first.` }],
-            };
+        // Check if player is in active combat (only block movement if detected)
+        const currentRoomMobs = await this.db.getMobsInLocation(gameState.currentRoom);
+        if (currentRoomMobs.length > 0) {
+            // Check if any enemies have detected the player (simple combat state check)
+            // For now, we'll allow movement if not explicitly in combat state
+            // Future enhancement: track combat state explicitly
+            const isInActiveCombat = gameState.inCombat || false;
+            if (isInActiveCombat) {
+                return {
+                    content: [{ type: 'text', text: `🚫 Cannot move - hostile contacts are actively engaged! You must deal with the threat first.` }],
+                };
+            }
+            // If not in active combat, allow stealth movement but with risk
         }
+        // Consume energy for movement
+        await this.db.updateGameState({ energy: gameState.energy - moveCost });
         await this.db.updateGameState({
             currentRoom: newRoomId,
             turnNumber: gameState.turnNumber + 1
         });
+        // Check for enemies in the new room and roll for detection
+        const newRoomMobs = await this.db.getMobsInLocation(newRoomId);
+        if (newRoomMobs.length > 0) {
+            try {
+                const detectionResult = await this.checkRoomDetection(newRoomMobs);
+                if (detectionResult.detected && detectionResult.combatResponse) {
+                    // Combat is triggered - all enemies are now alerted
+                    return detectionResult.combatResponse;
+                }
+            }
+            catch (error) {
+                console.error('Detection check failed:', error);
+                // Fall through to continue with normal movement
+            }
+        }
         // Check weight limits after movement
         const updatedGameState2 = await this.db.getGameState();
         const weightMessages = updatedGameState2 ? await this.engine.checkWeightLimits(updatedGameState2) : [];
@@ -360,6 +448,10 @@ Commander, every supply I deliver could mean the difference between your surviva
         let response = `🚶 obot-3 moves ${direction} to ${newRoomData.name}`;
         if (weightMessages.length > 0) {
             response += '\n\n' + weightMessages.join('\n');
+        }
+        // If there are undetected enemies, mention stealth mode
+        if (newRoomMobs.length > 0) {
+            response += `\n\n👁️ **STEALTH MODE**: Hostile contacts detected but haven't noticed you yet. Use 'explore' carefully or prepare for combat.`;
         }
         return {
             content: [{ type: 'text', text: response }],
@@ -371,6 +463,11 @@ Commander, every supply I deliver could mean the difference between your surviva
             throw new Error('Game not initialized');
         const messages = [];
         if (action === 'take') {
+            // Check energy cost for picking up items
+            const pickupCost = 1;
+            if (gameState.energy < pickupCost) {
+                return await this.handleEnergyDepleted(gameState);
+            }
             const items = await this.db.getItemsInLocation(gameState.currentRoom);
             const item = items.find(i => i.name.toLowerCase().includes(target.toLowerCase()));
             if (!item) {
@@ -385,6 +482,8 @@ Commander, every supply I deliver could mean the difference between your surviva
                     content: [{ type: 'text', text: `⚠️  Cannot take ${item.name} - would exceed obot-3's carrying capacity (${currentWeight + item.weight}lbs > 30lbs)` }],
                 };
             }
+            // Consume energy for pickup
+            await this.db.updateGameState({ energy: gameState.energy - pickupCost });
             await this.db.moveItem(item.id, 'inventory');
             messages.push(`✅ obot-3 picks up ${item.name} (${item.weight}lbs)`);
             // Check weight limits after taking item
@@ -395,6 +494,11 @@ Commander, every supply I deliver could mean the difference between your surviva
             }
         }
         else if (action === 'attack') {
+            // Check energy cost for combat
+            const attackCost = 3;
+            if (gameState.energy < attackCost) {
+                return await this.handleEnergyDepleted(gameState);
+            }
             const mobs = await this.db.getMobsInLocation(gameState.currentRoom);
             const mob = mobs.find(m => m.name.toLowerCase().includes(target.toLowerCase()));
             if (!mob) {
@@ -402,6 +506,8 @@ Commander, every supply I deliver could mean the difference between your surviva
                     content: [{ type: 'text', text: `Target "${target}" not found in this location.` }],
                 };
             }
+            // Consume energy for attack
+            await this.db.updateGameState({ energy: gameState.energy - attackCost });
             // Player attacks first (with weapon bonuses)
             const playerDamage = await this.engine.calculateAttackDamage();
             const newMobHealth = Math.max(0, mob.health - playerDamage);
@@ -413,6 +519,13 @@ Commander, every supply I deliver could mean the difference between your surviva
             messages.push(`⚔️  obot-3 attacks ${mob.name}${weaponText} for ${playerDamage} damage!`);
             if (newMobHealth <= 0) {
                 messages.push(`💀 ${mob.name} has been neutralized!`);
+                // Check if all mobs in current room are defeated
+                const remainingMobs = await this.db.getMobsInLocation(gameState.currentRoom);
+                if (remainingMobs.length === 0) {
+                    // Clear combat state when all enemies are defeated
+                    await this.db.updateGameState({ inCombat: false });
+                    messages.push('🏆 **AREA SECURED** - All hostiles neutralized. obot-3 is no longer in combat.');
+                }
                 // Check if this was the final boss (workshop)
                 if (gameState.currentRoom === 'B15' && mob.id === 'rogue_bot_001') {
                     messages.push('\n🎉 **LEVEL COMPLETE!** The workshop is now secure and the plasma torch is accessible!');
@@ -580,16 +693,55 @@ Commander, every supply I deliver could mean the difference between your surviva
         else {
             messages.push(`📦 **TRANSFERRING ITEMS TO BUNKER STORAGE:**\n`);
             for (const item of items) {
-                // Move item back to bunker inventory based on type
+                // Process items based on type - add directly to bunker resources or storage
                 let bunkerType = 'material';
                 let survivalValue = 0;
+                let directResource = false;
                 switch (item.type) {
                     case 'food':
-                        bunkerType = 'food';
-                        survivalValue = Math.floor(item.weight * 0.5); // 0.5 days per pound of food
+                        // Add directly to bunker food reserves using specific food values
+                        const foodUnits = item.foodValue || 0;
+                        if (foodUnits > 0) {
+                            await this.db.addBunkerResource('food', foodUnits);
+                            messages.push(`  ✅ ${item.name} → ${foodUnits} days of food added to life support`);
+                            directResource = true;
+                        }
                         break;
                     case 'energy':
-                        bunkerType = 'fuel';
+                        // Add directly to bunker energy reserves using specific energy values
+                        const energyUnits = item.energyValue || 0;
+                        if (energyUnits > 0) {
+                            await this.db.addBunkerResource('energy', energyUnits);
+                            messages.push(`  ✅ ${item.name} → ${energyUnits} days of energy added to life support`);
+                            directResource = true;
+                        }
+                        else {
+                            // Not compatible with bunker systems (like heating oil)
+                            bunkerType = 'material';
+                            survivalValue = item.value;
+                            messages.push(`  📦 ${item.name} → stored (not compatible with fuel cell generator)`);
+                        }
+                        break;
+                    case 'water':
+                        // Add directly to bunker water reserves using specific water values
+                        const waterUnits = item.waterValue || 0;
+                        if (waterUnits > 0) {
+                            await this.db.addBunkerResource('water', waterUnits);
+                            messages.push(`  ✅ ${item.name} → ${waterUnits} days of water added to life support`);
+                            directResource = true;
+                        }
+                        break;
+                    case 'raw_water':
+                        // Raw water needs purification - store for later processing
+                        bunkerType = 'material';
+                        survivalValue = 0;
+                        messages.push(`  ⚠️  ${item.name} → stored (requires purification tablets before use)`);
+                        break;
+                    case 'water_purifier':
+                        // Water purification supplies
+                        bunkerType = 'material';
+                        survivalValue = 0;
+                        messages.push(`  🧪 ${item.name} → stored (can purify contaminated water)`);
                         break;
                     case 'human_medicine':
                         bunkerType = 'medicine';
@@ -601,34 +753,60 @@ Commander, every supply I deliver could mean the difference between your surviva
                     default:
                         bunkerType = 'technology';
                 }
-                await this.db.addToBunkerInventory(item.id, item.name, 1, bunkerType, item.description, survivalValue || undefined);
+                // Only add to storage inventory if not processed as direct resource
+                if (!directResource) {
+                    await this.db.addToBunkerInventory(item.id, item.name, 1, bunkerType, item.description, survivalValue || undefined);
+                    messages.push(`  ✅ ${item.name} → Bunker ${bunkerType} storage`);
+                }
                 // Remove from robot inventory
                 await this.db.runAsync('DELETE FROM items WHERE id = ?', [item.id]);
                 transferredItems++;
-                totalSurvivalDays += survivalValue;
-                const survivalText = survivalValue > 0 ? ` (+${survivalValue} survival days)` : '';
-                messages.push(`  ✅ ${item.name} → Bunker ${bunkerType} storage${survivalText}`);
             }
         }
-        // Reset robot position to starting area
+        // Reset robot position to starting area  
         await this.db.updateGameState({
             currentRoom: 'B01',
             carryingWeight: 0,
             turnNumber: gameState.turnNumber + 5 // Return trip takes time
         });
-        messages.push(`\n🤖 obot-3 has returned safely to the bunker.`);
-        if (totalSurvivalDays > 0) {
-            messages.push(`📈 **Survival extended by ${totalSurvivalDays} days!**`);
+        const newResources = await this.db.getBunkerResources();
+        messages.push(`\n🤖 I have returned safely to the bunker and delivered all supplies.`);
+        messages.push(`⏰ **Time Advanced:** Now Day ${newResources.daysSinceIncident} After the Incident`);
+        messages.push(`📊 **Life Support Status:** Food: ${newResources.food}d | Water: ${newResources.water}d | Energy: ${newResources.energy}d`);
+        const minSurvival = Math.min(newResources.food, newResources.water, newResources.energy);
+        if (minSurvival <= 2) {
+            messages.push(`🚨 **WARNING:** Critical resources running low! Only ${minSurvival} days remaining.`);
         }
-        messages.push(`\nUse 'bunker_status' to check supplies or 'start_mission' to deploy obot-3 again.`);
+        messages.push(`\nCommander, use 'bunker_status' for detailed supplies or 'start_mission' to deploy me again.`);
         return {
             content: [{ type: 'text', text: messages.join('\n') }],
         };
     }
     async handleBunkerStatus() {
         const bunkerInventory = await this.db.getBunkerInventory();
+        const bunkerResources = await this.db.getBunkerResources();
         let response = `🏠 **BUNKER STATUS REPORT**\n\n`;
-        // Calculate total survival time
+        // Core resource status
+        response += `📅 **Day ${bunkerResources.daysSinceIncident} After the Incident**\n\n`;
+        response += `**CRITICAL LIFE SUPPORT RESOURCES:**\n`;
+        response += `🍞 Food: ${bunkerResources.food} days remaining\n`;
+        response += `💧 Water: ${bunkerResources.water} days remaining\n`;
+        response += `⚡ Energy: ${bunkerResources.energy} days remaining\n\n`;
+        // Calculate minimum survival time from critical resources
+        const minSurvival = Math.min(bunkerResources.food, bunkerResources.water, bunkerResources.energy);
+        if (minSurvival <= 0) {
+            response += `🚨 **CRITICAL FAILURE:** Life support systems offline! You must find resources immediately!\n\n`;
+        }
+        else if (minSurvival <= 2) {
+            response += `🚨 **CRITICAL:** Only ${minSurvival} days of life support remaining!\n\n`;
+        }
+        else if (minSurvival <= 5) {
+            response += `⚠️  **WARNING:** Only ${minSurvival} days until resource depletion.\n\n`;
+        }
+        else {
+            response += `✅ **STATUS:** ${minSurvival} days of life support available.\n\n`;
+        }
+        // Calculate additional survival time from stored supplies
         let totalSurvivalDays = 0;
         const foodItems = bunkerInventory.filter(item => item.type === 'food');
         foodItems.forEach(item => {
@@ -636,7 +814,9 @@ Commander, every supply I deliver could mean the difference between your surviva
                 totalSurvivalDays += item.survivalDays * item.quantity;
             }
         });
-        response += `⏱️  **Estimated Survival Time:** ${totalSurvivalDays} days\n\n`;
+        if (totalSurvivalDays > 0) {
+            response += `📦 **Additional Supplies:** ${totalSurvivalDays} days of stored food\n\n`;
+        }
         // Group items by type
         const itemsByType = {};
         bunkerInventory.forEach(item => {
@@ -673,6 +853,151 @@ Commander, every supply I deliver could mean the difference between your surviva
         }
         return {
             content: [{ type: 'text', text: response }],
+        };
+    }
+    async checkRoomDetection(mobs) {
+        // Roll detection for each mob - if any detect, all join combat
+        let detected = false;
+        let detectedBy = [];
+        for (const mob of mobs) {
+            const detectRoll = Math.random();
+            if (detectRoll < (mob.detectChance || 0.5)) {
+                detected = true;
+                detectedBy.push(mob.name);
+            }
+        }
+        if (!detected) {
+            return { detected: false };
+        }
+        // Set combat state when enemies detect the player
+        await this.db.updateGameState({ inCombat: true });
+        // Create combat response for group encounter
+        const enemyNames = mobs.map(mob => mob.name).join(', ');
+        const detectedNames = detectedBy.join(' and ');
+        const currentEnergy = await this.getCurrentEnergy();
+        const combatResponse = {
+            content: [{
+                    type: 'text',
+                    text: `⚠️ **COMBAT INITIATED!**\n\n🚨 ${detectedNames} spotted you entering the area!\n\n**HOSTILE ALERT**: All enemies in the room are now engaged:\n• ${enemyNames}\n\n🤖 obot-3 is now in combat with ${mobs.length > 1 ? 'multiple hostiles' : 'a hostile'}. Use combat commands to defend yourself or attempt to retreat.\n\n**Energy Status**: ${currentEnergy}/100 - Combat actions cost energy!`
+                }],
+        };
+        return { detected: true, combatResponse };
+    }
+    async getCurrentEnergy() {
+        const gameState = await this.db.getGameState();
+        return gameState?.energy || 0;
+    }
+    async handleEnergyDepleted(gameState) {
+        // If energy is at 0 or below, trigger hibernation
+        if (gameState.energy <= 0) {
+            return await this.triggerHibernation();
+        }
+        // Low energy warning
+        return {
+            content: [{
+                    type: 'text',
+                    text: `⚠️  **ENERGY CRITICAL** - Current Energy: ${gameState.energy}/100\n\n🤖 Commander, my power reserves are critically low. I cannot perform this action.\n\n**OPTIONS:**\n- Return to bunker for recharge (cost: varies by distance)\n- Wait for emergency hibernation if energy reaches 0\n\n**WARNING**: If I run out of energy in the field, I'll hibernate for 2 days (consuming 2 days of bunker resources) and only recover to 40 energy.`
+                }],
+        };
+    }
+    async triggerHibernation() {
+        // Force hibernation - 2 day advancement, 40 energy recovery
+        await this.db.advanceDay(2); // Consumes bunker resources for 2 days
+        await this.db.updateGameState({ energy: 40 });
+        const bunkerResources = await this.db.getBunkerResources();
+        return {
+            content: [{
+                    type: 'text',
+                    text: `💤 **EMERGENCY HIBERNATION ACTIVATED**\n\n🤖 Commander, my energy reserves were completely depleted. I've entered emergency hibernation mode.\n\n**HIBERNATION REPORT:**\n- Duration: 2 days\n- Energy recovered: 40/100 (emergency power only)\n- Bunker resources consumed during hibernation:\n  • Food: 2 days (${bunkerResources.food} remaining)\n  • Water: 2 days (${bunkerResources.water} remaining)  \n  • Energy: 2 days (${bunkerResources.energy} remaining)\n\n⚠️  **ADVISORY**: Emergency hibernation is costly. Plan your energy usage more carefully to avoid future hibernations.\n\nI now have enough power to return to base for full recharging.`
+                }],
+        };
+    }
+    async handleRestAndRecharge() {
+        const gameState = await this.db.getGameState();
+        if (!gameState)
+            throw new Error('Game not initialized');
+        // Check if we're at the bunker (BUNKER or B01)
+        if (gameState.currentRoom !== 'BUNKER' && gameState.currentRoom !== 'B01') {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🚫 **Cannot rest here** - I can only rest and recharge at the bunker.\n\nCurrent location: ${gameState.currentRoom}\nI need to return to bunker (BUNKER or B01) to safely recharge overnight.`
+                    }],
+            };
+        }
+        // Check if already at full energy
+        if (gameState.energy >= 100) {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🔋 **Energy Already Full** - Current Energy: ${gameState.energy}/100\n\nCommander, my power reserves are already at maximum capacity. No recharging needed at this time.`
+                    }],
+            };
+        }
+        // Advance 1 day and fully recharge
+        await this.db.advanceDay(1);
+        await this.db.updateGameState({ energy: 100 });
+        const bunkerResources = await this.db.getBunkerResources();
+        // Check for critical resource warnings
+        const minResource = Math.min(bunkerResources.food, bunkerResources.water, bunkerResources.energy);
+        let warningMessage = '';
+        if (minResource <= 2) {
+            warningMessage = `\n🚨 **CRITICAL WARNING**: Bunker life support critically low! Only ${minResource} days remaining before system failure.`;
+        }
+        else if (minResource <= 5) {
+            warningMessage = `\n⚠️  **WARNING**: Bunker resources running low. Consider prioritizing supply collection.`;
+        }
+        return {
+            content: [{
+                    type: 'text',
+                    text: `🛌 **OVERNIGHT RECHARGE COMPLETE**\n\n🤖 Commander, I have rested overnight and my systems are fully restored.\n\n**RECHARGE REPORT:**\n- Energy: ${gameState.energy} → 100/100 (fully recharged)\n- Time advanced: 1 day\n- Days since incident: ${bunkerResources.daysSinceIncident}\n\n**BUNKER LIFE SUPPORT STATUS:**\n- Food: ${bunkerResources.food} days remaining\n- Water: ${bunkerResources.water} days remaining\n- Energy: ${bunkerResources.energy} days remaining${warningMessage}\n\nI am now ready for another day of exploration, Commander.`
+                }],
+        };
+    }
+    async handlePurifyWater() {
+        const bunkerInventory = await this.db.getBunkerInventory();
+        // Find raw water and purification tablets
+        const rawWaterItems = bunkerInventory.filter(item => item.id?.includes('raw_water') || item.type === 'material' && item.name?.toLowerCase().includes('stagnant water'));
+        const purifierItems = bunkerInventory.filter(item => item.id?.includes('water_purifier') || item.name?.toLowerCase().includes('purification tablets'));
+        if (rawWaterItems.length === 0) {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🚫 **No raw water available for purification**\n\nCommander, I don't detect any contaminated water in bunker storage that needs purification. You'll need to collect some raw water first.`
+                    }],
+            };
+        }
+        if (purifierItems.length === 0) {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🚫 **No purification tablets available**\n\nCommander, I don't have any water purification tablets in bunker storage. You'll need to find some purification supplies first.`
+                    }],
+            };
+        }
+        // Get the first raw water and purifier items
+        const rawWater = rawWaterItems[0];
+        const purifier = purifierItems[0];
+        // Check if we have enough uses on the purifier
+        if (purifier.quantity <= 0) {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🚫 **Purification tablets exhausted**\n\nCommander, the ${purifier.name} has no uses remaining. You'll need to find more purification supplies.`
+                    }],
+            };
+        }
+        // Calculate water yield - assume raw water gives 6 days when purified
+        const waterDays = 6; // Default value for raw water
+        // Process the purification
+        await this.db.addBunkerResource('water', waterDays);
+        await this.db.removeBunkerItem(rawWater.id, 1); // Remove 1 raw water
+        await this.db.removeBunkerItem(purifier.id, 1); // Use 1 purification tablet
+        return {
+            content: [{
+                    type: 'text',
+                    text: `💧 **Water Purification Complete**\n\n✅ Used 1 ${purifier.name} to purify ${rawWater.name}\n\n🚰 **Result:** +${waterDays} days of clean drinking water added to life support\n\n📊 **Resources Used:**\n  • ${rawWater.name}: 1 unit (${rawWater.quantity - 1} remaining)\n  • ${purifier.name}: 1 tablet (${purifier.quantity - 1} remaining)\n\nCommander, the water has been successfully purified and added to your bunker's life support system.`
+                }],
         };
     }
     async handleUsePlasmaTorch(direction) {

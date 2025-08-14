@@ -102,22 +102,22 @@ export const BASEMENT_ROOMS = {
 export const BASEMENT_ITEMS = [
   // Storage Unit A (B01)
   { id: "flashlight_001", name: "Flashlight", description: "A heavy-duty flashlight with a cracked lens", weight: 1.2, type: "tool", value: 0, energyCost: 2, location: "B01" },
-  { id: "canned_food_001", name: "Canned Beans", description: "A dented can of beans, still sealed", weight: 0.8, type: "food", value: 0, energyCost: 0, location: "B01" },
+  { id: "canned_food_001", name: "Canned Beans", description: "A dented can of beans, still sealed", weight: 0.8, type: "food", value: 0, energyCost: 0, location: "B01", foodValue: 2 },
   { id: "blanket_001", name: "Wool Blanket", description: "A moth-eaten but warm wool blanket", weight: 2.5, type: "material", value: 0, energyCost: 0, location: "B01" },
 
   // Electrical Room (B03)
   { id: "wire_coil_001", name: "Copper Wire", description: "50 feet of copper electrical wire", weight: 3.0, type: "material", value: 0, energyCost: 0, location: "B03" },
   { id: "fuses_001", name: "Electrical Fuses", description: "A box of assorted electrical fuses", weight: 0.5, type: "material", value: 0, energyCost: 0, location: "B03" },
-  { id: "battery_pack_001", name: "Emergency Battery", description: "A backup power cell, still holds charge", weight: 4.2, type: "energy", value: 25, energyCost: 0, location: "B03" },
+  { id: "battery_pack_001", name: "Small Battery Pack", description: "A backup battery pack, partially drained", weight: 4.2, type: "energy", value: 25, energyCost: 0, location: "B03", energyValue: 3 },
 
   // Storage Unit B (B04)  
   { id: "tent_001", name: "Camping Tent", description: "A compact two-person tent in good condition", weight: 6.8, type: "material", value: 0, energyCost: 0, location: "B04" },
   { id: "sleeping_bag_001", name: "Sleeping Bag", description: "A down-filled sleeping bag", weight: 3.2, type: "material", value: 0, energyCost: 0, location: "B04" },
   { id: "first_aid_001", name: "Human First Aid Kit", description: "Medical supplies for treating human injuries", weight: 1.8, type: "human_medicine", value: 0, energyCost: 0, location: "B04" },
-  { id: "energy_bars_001", name: "Protein Energy Bars", description: "High-calorie emergency food bars", weight: 0.8, type: "food", value: 0, energyCost: 0, location: "B04" },
+  { id: "energy_bars_001", name: "Protein Energy Bars", description: "High-calorie emergency food bars - 6 day supply", weight: 0.8, type: "food", value: 0, energyCost: 0, location: "B04", foodValue: 6 },
 
-  // Boiler Room (B07)
-  { id: "fuel_can_001", name: "Fuel Canister", description: "A metal canister containing heating fuel", weight: 5.5, type: "energy", value: 40, energyCost: 0, location: "B07" },
+  // Boiler Room (B07)  
+  { id: "fuel_can_001", name: "Heating Oil", description: "A metal canister containing heating oil - not suitable for the electrical generator", weight: 5.5, type: "material", value: 40, energyCost: 0, location: "B07" },
   { id: "pipe_wrench_001", name: "Pipe Wrench", description: "A heavy adjustable wrench for plumbing work", weight: 2.8, type: "tool", value: 5, energyCost: 3, location: "B07" },
   { id: "metal_sheets_001", name: "Scrap Metal", description: "Various pieces of sheet metal and pipe", weight: 8.2, type: "material", value: 0, energyCost: 0, location: "B07" },
 
@@ -132,6 +132,7 @@ export const BASEMENT_ITEMS = [
 
   // Janitor's Closet (B10)  
   { id: "cleaning_chems_001", name: "Industrial Cleaner", description: "Powerful cleaning chemicals in metal containers", weight: 3.6, type: "material", value: 0, energyCost: 0, location: "B10" },
+  { id: "water_bottles_001", name: "Bottled Water", description: "Clean emergency bottled water - ready to drink", weight: 4.0, type: "water", value: 0, energyCost: 0, location: "B10", waterValue: 4 },
   { id: "mop_bucket_001", name: "Mop and Bucket", description: "Heavy-duty cleaning equipment", weight: 4.1, type: "tool", value: 0, energyCost: 0, location: "B10" },
 
   // Wine Cellar (B11)
@@ -139,36 +140,45 @@ export const BASEMENT_ITEMS = [
   { id: "glass_shards_001", name: "Glass Fragments", description: "Sharp glass pieces from broken bottles", weight: 1.2, type: "material", value: 3, energyCost: 1, location: "B11" },
 
   // Mechanical Room (B12)
-  { id: "power_cell_001", name: "Backup Power Cell", description: "A high-capacity emergency power source", weight: 7.8, type: "energy", value: 50, energyCost: 0, location: "B12" },
+  { id: "power_cell_001", name: "High-Capacity Fuel Cell", description: "A fuel cell power source for the bunker generator - 12 day capacity", weight: 7.8, type: "energy", value: 50, energyCost: 0, location: "B12", energyValue: 12 },
+  { id: "water_tank_001", name: "Clean Water Tank", description: "Emergency water tank with filtered, ready-to-use water", weight: 6.2, type: "water", value: 0, energyCost: 0, location: "B12", waterValue: 8 },
   { id: "repair_kit_001", name: "Robot Repair Kit", description: "Mechanical parts and tools for robot maintenance", weight: 5.2, type: "robot_medicine", value: 35, energyCost: 0, location: "B12" },
   { id: "armor_plating_001", name: "Steel Armor Plating", description: "Reinforced metal plates for protective upgrades", weight: 8.5, type: "robot_medicine", value: 15, energyCost: 0, location: "B12" },
 
   // Storage Unit D (B13)
   { id: "furniture_wood_001", name: "Wooden Planks", description: "Salvageable wood from broken furniture", weight: 6.5, type: "material", value: 0, energyCost: 0, location: "B13" },
   { id: "old_electronics_001", name: "Vintage Electronics", description: "Old TV and radio components, might contain useful parts", weight: 12.3, type: "material", value: 0, energyCost: 0, location: "B13" },
+  
+  // Sub-basement Access (B14) - raw water that needs processing
+  { id: "raw_water_001", name: "Stagnant Water", description: "Murky water collected from the flooded area - needs purification before drinking", weight: 8.0, type: "raw_water", value: 0, energyCost: 0, location: "B14", rawWaterValue: 6 },
+  { id: "water_purifier_001", name: "Water Purification Tablets", description: "Chemical tablets that can purify contaminated water", weight: 0.2, type: "water_purifier", value: 0, energyCost: 0, location: "B14", purifierUses: 10 },
 
   // Workshop (B15) - Final room with plasma torch
   { id: "plasma_torch_001", name: "Plasma Torch", description: "A high-powered cutting tool capable of slicing through steel. This is the key to accessing the upper levels.", weight: 8.5, type: "tool", value: 50, energyCost: 15, location: "B15" },
   { id: "welding_mask_001", name: "Welding Mask", description: "Protective gear for working with cutting tools", weight: 1.8, type: "tool", value: 0, energyCost: 0, location: "B15" },
-  { id: "metal_workbench_001", name: "Scrap Materials", description: "Various metal pieces and components from the workbench", weight: 15.2, type: "material", value: 0, energyCost: 0, location: "B15" }
+  { id: "metal_workbench_001", name: "Scrap Materials", description: "Various metal pieces and components from the workbench", weight: 15.2, type: "material", value: 0, energyCost: 0, location: "B15" },
+  
+  // Add some more food items with different values
+  { id: "mre_pack_001", name: "MRE Pack", description: "Military Meal Ready-to-Eat - 3 day supply", weight: 2.1, type: "food", value: 0, energyCost: 0, location: "B09", foodValue: 3 },
+  { id: "noodle_case_001", name: "Case of Ramen", description: "24-pack of instant noodles - long-term food supply", weight: 4.8, type: "food", value: 0, energyCost: 0, location: "B04", foodValue: 12 }
 ];
 
 export const BASEMENT_MOBS = [
   // Wire Gnawers (mutant rats) - Laundry Room
-  { id: "wire_gnawer_001", name: "Wire Gnawer", description: "A mutated rat with metallic teeth, constantly gnawing on electrical cables", health: 15, maxHealth: 15, damage: "1d4+1", damageType: "electrical", location: "B06", isAlive: true, specialAbility: "electrical_glitch" },
-  { id: "wire_gnawer_002", name: "Wire Gnawer", description: "Another cable-chewing rodent with sparks flying from its bite", health: 15, maxHealth: 15, damage: "1d4+1", damageType: "electrical", location: "B06", isAlive: true, specialAbility: "electrical_glitch" },
+  { id: "wire_gnawer_001", name: "Wire Gnawer", description: "A mutated rat with metallic teeth, constantly gnawing on electrical cables", health: 15, maxHealth: 15, damage: "1d4+1", damageType: "electrical", location: "B06", isAlive: true, specialAbility: "electrical_glitch", detectChance: 0.7, combatStyle: "aggressive" },
+  { id: "wire_gnawer_002", name: "Wire Gnawer", description: "Another cable-chewing rodent with sparks flying from its bite", health: 15, maxHealth: 15, damage: "1d4+1", damageType: "electrical", location: "B06", isAlive: true, specialAbility: "electrical_glitch", detectChance: 0.7, combatStyle: "aggressive" },
 
   // Acid Spitter (mutant slug) - Janitor's Closet  
-  { id: "acid_spitter_001", name: "Acid Spitter", description: "A bloated slug-like creature that secretes corrosive chemicals", health: 8, maxHealth: 8, damage: "1d6+2", damageType: "acid", location: "B10", isAlive: true, specialAbility: "acid_burn" },
+  { id: "acid_spitter_001", name: "Acid Spitter", description: "A bloated slug-like creature that secretes corrosive chemicals", health: 8, maxHealth: 8, damage: "1d6+2", damageType: "acid", location: "B10", isAlive: true, specialAbility: "acid_burn", detectChance: 0.4, combatStyle: "defensive" },
 
   // Scrap Crawler (bacteria swarm) - Sub-basement Access
-  { id: "scrap_crawler_001", name: "Scrap Crawler", description: "A writhing mass of metallivorous bacteria that consumes metal on contact", health: 12, maxHealth: 12, damage: "1d3", damageType: "corrosion", location: "B14", isAlive: true, specialAbility: "attach_corrode" },
+  { id: "scrap_crawler_001", name: "Scrap Crawler", description: "A writhing mass of metallivorous bacteria that consumes metal on contact", health: 12, maxHealth: 12, damage: "1d3", damageType: "corrosion", location: "B14", isAlive: true, specialAbility: "attach_corrode", detectChance: 0.8, combatStyle: "swarm" },
 
   // Feral Survivor - Storage Unit C (ransacked area)
-  { id: "feral_survivor_001", name: "Feral Survivor", description: "A contaminated human wielding a makeshift crowbar, eyes glowing with radiation sickness", health: 25, maxHealth: 25, damage: "1d8+3", damageType: "physical", location: "B08", isAlive: true, specialAbility: "" },
+  { id: "feral_survivor_001", name: "Feral Survivor", description: "A contaminated human wielding a makeshift crowbar, eyes glowing with radiation sickness", health: 25, maxHealth: 25, damage: "1d8+3", damageType: "physical", location: "B08", isAlive: true, specialAbility: "", detectChance: 0.9, combatStyle: "aggressive" },
 
   // Rogue Maintenance Bot - Workshop (guarding the plasma torch)
-  { id: "rogue_bot_001", name: "Rogue Maintenance Bot", description: "A malfunctioned cleaning unit with hydraulic crusher arms, sparks flying from damaged circuits", health: 45, maxHealth: 45, damage: "2d6+4", damageType: "crushing", location: "B15", isAlive: true, specialAbility: "grapple" }
+  { id: "rogue_bot_001", name: "Rogue Maintenance Bot", description: "A malfunctioned cleaning unit with hydraulic crusher arms, sparks flying from damaged circuits", health: 45, maxHealth: 45, damage: "2d6+4", damageType: "crushing", location: "B15", isAlive: true, specialAbility: "grapple", detectChance: 0.6, combatStyle: "defensive" }
 ];
 
 // Environmental hazards by room

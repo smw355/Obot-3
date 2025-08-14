@@ -156,7 +156,7 @@ export declare const BASEMENT_ROOMS: {
         cleared: boolean;
     };
 };
-export declare const BASEMENT_ITEMS: {
+export declare const BASEMENT_ITEMS: ({
     id: string;
     name: string;
     description: string;
@@ -165,7 +165,82 @@ export declare const BASEMENT_ITEMS: {
     value: number;
     energyCost: number;
     location: string;
-}[];
+    foodValue?: undefined;
+    energyValue?: undefined;
+    waterValue?: undefined;
+    rawWaterValue?: undefined;
+    purifierUses?: undefined;
+} | {
+    id: string;
+    name: string;
+    description: string;
+    weight: number;
+    type: string;
+    value: number;
+    energyCost: number;
+    location: string;
+    foodValue: number;
+    energyValue?: undefined;
+    waterValue?: undefined;
+    rawWaterValue?: undefined;
+    purifierUses?: undefined;
+} | {
+    id: string;
+    name: string;
+    description: string;
+    weight: number;
+    type: string;
+    value: number;
+    energyCost: number;
+    location: string;
+    energyValue: number;
+    foodValue?: undefined;
+    waterValue?: undefined;
+    rawWaterValue?: undefined;
+    purifierUses?: undefined;
+} | {
+    id: string;
+    name: string;
+    description: string;
+    weight: number;
+    type: string;
+    value: number;
+    energyCost: number;
+    location: string;
+    waterValue: number;
+    foodValue?: undefined;
+    energyValue?: undefined;
+    rawWaterValue?: undefined;
+    purifierUses?: undefined;
+} | {
+    id: string;
+    name: string;
+    description: string;
+    weight: number;
+    type: string;
+    value: number;
+    energyCost: number;
+    location: string;
+    rawWaterValue: number;
+    foodValue?: undefined;
+    energyValue?: undefined;
+    waterValue?: undefined;
+    purifierUses?: undefined;
+} | {
+    id: string;
+    name: string;
+    description: string;
+    weight: number;
+    type: string;
+    value: number;
+    energyCost: number;
+    location: string;
+    purifierUses: number;
+    foodValue?: undefined;
+    energyValue?: undefined;
+    waterValue?: undefined;
+    rawWaterValue?: undefined;
+})[];
 export declare const BASEMENT_MOBS: {
     id: string;
     name: string;
@@ -177,6 +252,8 @@ export declare const BASEMENT_MOBS: {
     location: string;
     isAlive: boolean;
     specialAbility: string;
+    detectChance: number;
+    combatStyle: string;
 }[];
 export declare const BASEMENT_HAZARDS: {
     B03: {

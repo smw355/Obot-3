@@ -65,6 +65,11 @@ class Database {
         turnNumber INTEGER NOT NULL DEFAULT 1,
         gameCompleted BOOLEAN NOT NULL DEFAULT FALSE,
         missionStarted BOOLEAN NOT NULL DEFAULT FALSE,
+        daysSinceIncident INTEGER NOT NULL DEFAULT 12,
+        bunkerFood INTEGER NOT NULL DEFAULT 7,
+        bunkerWater INTEGER NOT NULL DEFAULT 10,
+        bunkerEnergy INTEGER NOT NULL DEFAULT 15,
+        inCombat BOOLEAN NOT NULL DEFAULT FALSE,
         createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -125,8 +130,8 @@ class Database {
         const existingState = stmt.step() ? stmt.getAsObject() : null;
         if (!existingState) {
             this.db.run(`
-        INSERT INTO game_state (id, currentRoom, health, energy, maxEnergy, carryingWeight, turnNumber, gameCompleted, missionStarted) 
-        VALUES (1, 'B01', 100, 100, 100, 0, 1, 0, 0)
+        INSERT INTO game_state (id, currentRoom, health, energy, maxEnergy, carryingWeight, turnNumber, gameCompleted, missionStarted, daysSinceIncident, bunkerFood, bunkerWater, bunkerEnergy) 
+        VALUES (1, 'B01', 100, 100, 100, 0, 1, 0, 0, 12, 7, 10, 15)
       `);
         }
         stmt.free();
@@ -281,6 +286,25 @@ class Database {
         }
         this.saveDatabase();
     }
+    async removeBunkerItem(itemId, quantity = 1) {
+        const stmt = this.db.prepare('SELECT * FROM bunker_inventory WHERE id = ?');
+        stmt.bind([itemId]);
+        const existing = stmt.step() ? stmt.getAsObject() : null;
+        stmt.free();
+        if (!existing || existing.quantity < quantity) {
+            return false; // Not enough items available
+        }
+        if (existing.quantity === quantity) {
+            // Remove the item entirely if we're taking all of them
+            this.db.run('DELETE FROM bunker_inventory WHERE id = ?', [itemId]);
+        }
+        else {
+            // Just reduce the quantity
+            this.db.run('UPDATE bunker_inventory SET quantity = quantity - ? WHERE id = ?', [quantity, itemId]);
+        }
+        this.saveDatabase();
+        return true;
+    }
     // Helper method for compatibility with existing code
     async runAsync(sql, params = []) {
         try {
@@ -291,6 +315,43 @@ class Database {
         catch (error) {
             throw error;
         }
+    }
+    // Bunker resource management methods
+    async advanceDay(daysToAdvance = 1) {
+        const gameState = await this.getGameState();
+        if (!gameState)
+            throw new Error('Game state not found');
+        const newDay = gameState.daysSinceIncident + daysToAdvance;
+        const newFood = Math.max(0, gameState.bunkerFood - daysToAdvance);
+        const newWater = Math.max(0, gameState.bunkerWater - daysToAdvance);
+        const newEnergy = Math.max(0, gameState.bunkerEnergy - daysToAdvance);
+        await this.updateGameState({
+            daysSinceIncident: newDay,
+            bunkerFood: newFood,
+            bunkerWater: newWater,
+            bunkerEnergy: newEnergy
+        });
+    }
+    async addBunkerResource(resource, amount) {
+        const field = `bunker${resource.charAt(0).toUpperCase() + resource.slice(1)}`;
+        const gameState = await this.getGameState();
+        if (!gameState)
+            throw new Error('Game state not found');
+        const currentValue = gameState[field];
+        await this.updateGameState({
+            [field]: currentValue + amount
+        });
+    }
+    async getBunkerResources() {
+        const gameState = await this.getGameState();
+        if (!gameState)
+            throw new Error('Game state not found');
+        return {
+            food: gameState.bunkerFood,
+            water: gameState.bunkerWater,
+            energy: gameState.bunkerEnergy,
+            daysSinceIncident: gameState.daysSinceIncident
+        };
     }
 }
 exports.Database = Database;

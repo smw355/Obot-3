@@ -11,6 +11,7 @@ export declare class GameEngine {
     private enterMaintenanceMode;
     processCombatEffects(gameState: GameState): Promise<string[]>;
     useItem(itemId: string, gameState: GameState): Promise<string[]>;
+    private attemptEnergyRetreat;
     calculateAttackDamage(): Promise<number>;
 }
 //# sourceMappingURL=game-engine.d.ts.map
