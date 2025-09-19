@@ -1210,20 +1210,10 @@ Commander, every supply I deliver could mean the difference between your surviva
       };
     }
 
-    // Check if in workshop
-    if (gameState.currentRoom !== 'B15') {
+    // Check if in correct locations for plasma torch usage
+    if (gameState.currentRoom !== 'STAIRS_UP' && gameState.currentRoom !== 'HATCH_DOWN_SEALED_2') {
       return {
-        content: [{ type: 'text', text: `🚫 Can only use plasma torch in the Workshop. Current location: ${gameState.currentRoom}` }],
-      };
-    }
-
-    // Check if has plasma torch
-    const items = await this.db.getItemsInLocation('inventory');
-    const plasmaTorch = items.find(item => item.id === 'plasma_torch_001');
-    
-    if (!plasmaTorch) {
-      return {
-        content: [{ type: 'text', text: `🚫 Plasma torch not found in inventory. You must collect it from the workshop first.` }],
+        content: [{ type: 'text', text: `🚫 Can only use plasma torch at stairs (to cut up to lobby) or sealed hatch (to cut down to tunnels). Current location: ${gameState.currentRoom}` }],
       };
     }
 
@@ -1234,64 +1224,15 @@ Commander, every supply I deliver could mean the difference between your surviva
       };
     }
 
-    // Check energy cost
-    if (gameState.energy < 15) {
-      return {
-        content: [{ type: 'text', text: `🔋 Insufficient energy to operate plasma torch. Required: 15, Available: ${gameState.energy}` }],
-      };
-    }
+    // Use the game engine's plasma torch method
+    const messages = await this.engine.usePlasmaTorch(gameState, direction);
+    
+    const response = messages.join('\n');
 
-    // Use plasma torch
+    // Update turn number
     await this.db.updateGameState({
-      energy: gameState.energy - 15,
       turnNumber: gameState.turnNumber + 3
     });
-
-    let response: string;
-    let workshopExits: any;
-
-    if (direction === 'up') {
-      // Cut through to main lobby
-      workshopExits = { west: "B14", north: "B12", up: "LOBBY" };
-      await this.db.updateRoomExits('B15', JSON.stringify(workshopExits));
-      
-      response = `🔥 **PLASMA TORCH ACTIVATED - CUTTING UPWARD**
-
-⚡ High-energy plasma beam ignites with brilliant blue-white intensity...
-🔨 Cutting through the warped steel door leading to the main lobby...
-💨 Molten metal drips and hisses as barriers melt away...
-
-🚪 **SUCCESS!** Path to the main lobby is clear!
-
-🏢 **NEW AREA ACCESSIBLE:** Main Lobby
-🆙 A stairway leading up to the building's main floor awaits.
-
-✅ Use 'move up' to access the lobby and potentially escape the building
-✅ Or use 'return_to_bunker' to deliver supplies before venturing to the surface
-
-⚠️  **WARNING:** The lobby may be heavily contaminated with radiation!`;
-
-    } else {
-      // Cut through to sub-basement
-      workshopExits = { west: "B14", north: "B12", down: "TUNNELS" };
-      await this.db.updateRoomExits('B15', JSON.stringify(workshopExits));
-      
-      response = `🔥 **PLASMA TORCH ACTIVATED - CUTTING DOWNWARD**
-
-⚡ High-energy plasma beam cuts through the heavy maintenance hatch...
-🔨 Metal sparks fly as the sealed passage opens...
-💨 Cool air rushes up from the depths below...
-
-🚪 **SUCCESS!** Access to sub-basement tunnels secured!
-
-🕳️ **NEW AREA ACCESSIBLE:** Sub-Basement Tunnel System
-⬇️ Dark tunnels leading to adjacent buildings stretch into the distance.
-
-✅ Use 'move down' to explore the tunnel network
-✅ Or use 'return_to_bunker' to prepare for extended underground exploration
-
-⚠️  **WARNING:** Unknown dangers lurk in the tunnel depths!`;
-    }
 
     return {
       content: [{ type: 'text', text: response }],

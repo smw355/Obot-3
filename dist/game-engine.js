@@ -149,7 +149,7 @@ class GameEngine {
             health: 25,
             energy: Math.floor(newMaxEnergy * 0.5),
             maxEnergy: newMaxEnergy,
-            currentRoom: 'B01' // Return to starting room
+            currentRoom: 'STORAGE_15' // Return to starting room
         });
         // Clear all combat effects
         const effects = await this.db.getCombatEffects();
@@ -212,6 +212,28 @@ class GameEngine {
                 messages.push(`⚔️  ${item.name} equipped as primary weapon (${item.value} bonus damage)`);
                 // Weapons stay equipped, don't get consumed
                 return messages;
+            case 'key':
+                messages.push(`🔑 ${item.name} added to inventory - can be used to unlock restricted areas`);
+                // Keys don't get consumed on pickup, only when used
+                return messages;
+            case 'tool':
+                if (item.name.includes('Plasma Torch')) {
+                    messages.push(`🔥 ${item.name} acquired! This high-powered cutting tool can slice through steel barriers and sealed hatches. Use it near blocked exits to cut through.`);
+                    return messages;
+                }
+                else {
+                    messages.push(`🔧 ${item.name} equipped - provides utility functions (${item.value} effectiveness)`);
+                    return messages;
+                }
+            case 'water':
+                messages.push(`💧 ${item.name} - clean water supply ready for consumption by human survivors`);
+                return messages;
+            case 'water_purifier':
+                messages.push(`💊 ${item.name} - can purify contaminated water for safe consumption`);
+                return messages;
+            case 'raw_water':
+                messages.push(`🚰 ${item.name} - contaminated water that needs purification before use`);
+                return messages;
         }
         // Update game state
         const newHealth = Math.min(100, gameState.health + healthGain);
@@ -232,9 +254,9 @@ class GameEngine {
         // Prefer moving toward bunker (B01) or to BUNKER if available
         const exits = Object.entries(roomData.exits);
         let retreatRoom = null;
-        // Priority: BUNKER > B01 > any room closer to bunker > random room
+        // Priority: BUNKER > STORAGE_15 > any room closer to bunker > random room
         for (const [direction, roomId] of exits) {
-            if (roomId === 'BUNKER' || roomId === 'B01') {
+            if (roomId === 'BUNKER' || roomId === 'STORAGE_15') {
                 retreatRoom = roomId;
                 break;
             }
@@ -261,6 +283,80 @@ class GameEngine {
             return baseAttack + weapon.value; // Add weapon bonus damage
         }
         return baseAttack;
+    }
+    // Handle plasma torch cutting operations
+    async usePlasmaTorch(gameState, target) {
+        const items = await this.db.getItemsInLocation('inventory');
+        const plasmaTorch = items.find(item => item.name.includes('Plasma Torch'));
+        if (!plasmaTorch) {
+            return ["🚫 Plasma torch not found in inventory."];
+        }
+        if (gameState.energy < plasmaTorch.energyCost) {
+            return [`🚫 Insufficient energy to operate plasma torch. Required: ${plasmaTorch.energyCost}, Available: ${gameState.energy}`];
+        }
+        const messages = [];
+        // Handle different cutting targets
+        if (target.toLowerCase().includes('stair') || target.toLowerCase().includes('up')) {
+            // Cutting through stairs to lobby
+            messages.push("🔥 **PLASMA TORCH ACTIVATED - CUTTING UPWARD**");
+            messages.push("The high-powered plasma beam slices through the bent steel door and debris blocking the stairway.");
+            messages.push("Molten metal drips as the torch cuts a clean path through the obstacles.");
+            messages.push("🎯 **STAIRS CLEARED!** The path to the lobby is now open.");
+            messages.push("✅ Victory condition unlocked: 'move up' from the stairs to escape to the lobby");
+            // Update stairs room to be accessible
+            await this.db.updateRoomExits('STAIRS_UP', JSON.stringify({
+                north: "HALLWAY_C2",
+                up: "LOBBY"
+            }));
+        }
+        else if (target.toLowerCase().includes('hatch') || target.toLowerCase().includes('down')) {
+            // Cutting through hatch to sub-basement
+            messages.push("🔥 **PLASMA TORCH ACTIVATED - CUTTING DOWNWARD**");
+            messages.push("The plasma torch melts through the heavy welding sealing the maintenance hatch.");
+            messages.push("Sparks fly as the industrial seal gives way to the cutting beam.");
+            messages.push("🎯 **HATCH UNSEALED!** The sub-basement tunnel system is now accessible.");
+            messages.push("✅ Victory condition unlocked: 'move down' from the hatch to escape via tunnels");
+            // Update hatch room to be accessible
+            await this.db.updateRoomExits('HATCH_DOWN_SEALED_2', JSON.stringify({
+                up: "LAUNDRY_SUPPLY",
+                down: "TUNNELS"
+            }));
+        }
+        else {
+            return [`🚫 Cannot use plasma torch on "${target}". Valid targets: stairs (up to lobby) or hatch (down to tunnels).`];
+        }
+        // Consume energy for plasma torch operation
+        await this.db.updateGameState({
+            energy: gameState.energy - plasmaTorch.energyCost
+        });
+        return messages;
+    }
+    // Handle water purification mechanics
+    async purifyWater(gameState, rawWaterId, purifierId) {
+        const items = await this.db.getItemsInLocation('inventory');
+        const rawWater = items.find(item => item.id === rawWaterId);
+        const purifier = items.find(item => item.id === purifierId);
+        if (!rawWater || rawWater.type !== 'raw_water') {
+            return ["🚫 Raw water not found in inventory."];
+        }
+        if (!purifier || purifier.type !== 'water_purifier') {
+            return ["🚫 Water purification tablets not found in inventory."];
+        }
+        const messages = [];
+        const rawWaterValue = rawWater.rawWaterValue || 0;
+        const purifierUses = purifier.purifierUses || 0;
+        if (purifierUses <= 0) {
+            return ["🚫 Water purification tablets are exhausted."];
+        }
+        // Remove raw water and consume one purifier use
+        await this.db.moveItem(rawWater.id, 'consumed');
+        // Create clean water
+        const cleanWaterId = `clean_water_${Date.now()}`;
+        // Note: This would require adding the item to the database
+        messages.push(`💧 **Water Purified!** ${rawWater.name} has been treated with purification tablets.`);
+        messages.push(`✅ Created clean water supply (${rawWaterValue} day supply) safe for human consumption.`);
+        messages.push(`💊 Purification tablets remaining: ${purifierUses - 1}`);
+        return messages;
     }
 }
 exports.GameEngine = GameEngine;

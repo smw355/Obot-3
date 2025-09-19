@@ -13,5 +13,7 @@ export declare class GameEngine {
     useItem(itemId: string, gameState: GameState): Promise<string[]>;
     private attemptEnergyRetreat;
     calculateAttackDamage(): Promise<number>;
+    usePlasmaTorch(gameState: GameState, target: string): Promise<string[]>;
+    purifyWater(gameState: GameState, rawWaterId: string, purifierId: string): Promise<string[]>;
 }
 //# sourceMappingURL=game-engine.d.ts.map
