@@ -283,6 +283,9 @@ export class GameEngine {
       case 'raw_water':
         messages.push(`🚰 ${item.name} - contaminated water that needs purification before use`);
         return messages;
+
+      case 'material':
+        return await this.handleMaterialItem(item, gameState);
     }
 
     // Update game state
@@ -436,6 +439,113 @@ export class GameEngine {
     messages.push(`✅ Created clean water supply (${rawWaterValue} day supply) safe for human consumption.`);
     messages.push(`💊 Purification tablets remaining: ${purifierUses - 1}`);
 
+    return messages;
+  }
+
+  // Handle material items with robot-specific functionality
+  private async handleMaterialItem(item: any, gameState: GameState): Promise<string[]> {
+    const messages: string[] = [];
+
+    // Emergency Radio - Robot can scan for emergency broadcasts
+    if (item.name.includes('Emergency Radio')) {
+      messages.push(`📻 **ACTIVATING EMERGENCY RADIO**`);
+      messages.push(`🔍 Scanning emergency frequencies...`);
+      messages.push(`📡 **EMERGENCY BROADCAST DETECTED:**`);
+      messages.push(`"This is Emergency Station Alpha-7... Day ${gameState.daysSinceIncident} since the incident..."`);
+      messages.push(`"Radiation levels remain critical in downtown LA... Seek shelter immediately..."`);
+      messages.push(`"Government evacuation zones are: Sectors 12, 15, and 18... Avoid all other areas..."`);
+      messages.push(`"If you can hear this, stay underground. Do not venture to surface until all-clear signal."`);
+      messages.push(`📻 Radio reception fades. Emergency broadcast information logged.`);
+      return messages;
+    }
+
+    // Building Blueprints - Robot can analyze building layout
+    if (item.name.includes('Building Blueprints')) {
+      messages.push(`📐 **ANALYZING BUILDING BLUEPRINTS**`);
+      messages.push(`🔍 Processing architectural data through visual recognition systems...`);
+      messages.push(`📊 **BUILDING ANALYSIS COMPLETE:**`);
+      messages.push(`- Emergency exits: 3 confirmed routes to surface level`);
+      messages.push(`- Structural weak points: Northeast corner shows stress fractures`);
+      messages.push(`- Hidden areas: Service tunnels connect to adjacent buildings`);
+      messages.push(`- Power systems: Main electrical room controls all building power`);
+      messages.push(`🤖 Navigation database updated with structural information.`);
+      return messages;
+    }
+
+    // Electrical Components - Robot can analyze for system repairs
+    if (item.name.includes('Electrical Components')) {
+      messages.push(`⚡ **ANALYZING ELECTRICAL COMPONENTS**`);
+      messages.push(`🔧 Scanning components for compatibility with obot-3 systems...`);
+      messages.push(`💡 **COMPONENT ANALYSIS:**`);
+      messages.push(`- 12V power regulators: Compatible with charging systems`);
+      messages.push(`- Circuit breakers: Could restore power to building sections`);
+      messages.push(`- Wiring harnesses: Suitable for emergency repairs`);
+      messages.push(`⚡ Components stored for potential system integration.`);
+      return messages;
+    }
+
+    // Scrap Metal - Robot can assess for construction/repair potential
+    if (item.name.includes('Scrap Metal')) {
+      messages.push(`🔩 **ANALYZING SCRAP METAL COLLECTION**`);
+      messages.push(`🤖 Evaluating materials for structural reinforcement potential...`);
+      messages.push(`🔧 **MATERIAL ASSESSMENT:**`);
+      messages.push(`- Steel pipes: Suitable for barrier construction`);
+      messages.push(`- Metal plates: Could reinforce damaged doors`);
+      messages.push(`- Wire mesh: Useful for air filtration systems`);
+      messages.push(`🛠️ Materials catalogued for potential construction projects.`);
+      return messages;
+    }
+
+    // Vinyl Records - Robot can play them for morale/information
+    if (item.name.includes('Vinyl Record Collection')) {
+      messages.push(`🎵 **ACCESSING VINYL RECORD COLLECTION**`);
+      messages.push(`🔍 Scanning record labels through optical sensors...`);
+      messages.push(`🎶 **COLLECTION CONTAINS:**`);
+      messages.push(`- Classical music: Could provide psychological comfort to survivors`);
+      messages.push(`- Jazz albums: High-quality recordings from the 1960s-70s`);
+      messages.push(`- Radio dramas: Audio entertainment for extended shelter periods`);
+      messages.push(`🎧 Audio files digitized and stored for survivor morale support.`);
+      return messages;
+    }
+
+    // Family Photos - Robot can scan for identification/intelligence
+    if (item.name.includes('Family Photo') || item.name.includes('Photo Albums')) {
+      messages.push(`📸 **SCANNING FAMILY PHOTOGRAPHS**`);
+      messages.push(`🔍 Processing images through facial recognition database...`);
+      messages.push(`👥 **PHOTO ANALYSIS:**`);
+      messages.push(`- Resident identification: Multiple building tenants documented`);
+      messages.push(`- Time period: Photos span 1995-2024, showing building history`);
+      messages.push(`- Social connections: Family networks and relationships mapped`);
+      messages.push(`📊 Resident data logged for potential survivor location assistance.`);
+      return messages;
+    }
+
+    // Books - Robot can scan for useful information
+    if (item.name.includes('Box of Books')) {
+      messages.push(`📚 **SCANNING BOOK COLLECTION**`);
+      messages.push(`🔍 Using optical character recognition to process text content...`);
+      messages.push(`📖 **USEFUL INFORMATION FOUND:**`);
+      messages.push(`- Survival handbook: Techniques for water purification and shelter`);
+      messages.push(`- Electronics manual: Procedures for equipment repair`);
+      messages.push(`- Medical reference: First aid procedures for radiation exposure`);
+      messages.push(`🧠 Knowledge database updated with practical survival information.`);
+      return messages;
+    }
+
+    // Wine Collection - Robot can analyze for trade value/chemical properties
+    if (item.name.includes('Wine Collection')) {
+      messages.push(`🍷 **ANALYZING WINE COLLECTION**`);
+      messages.push(`🔬 Scanning bottles for chemical composition and value assessment...`);
+      messages.push(`📊 **COLLECTION ASSESSMENT:**`);
+      messages.push(`- High-value vintages: Could be valuable for survivor trade`);
+      messages.push(`- Alcohol content: 12-15% ethanol - potential antiseptic use`);
+      messages.push(`- Preservation status: Most bottles remain sealed and viable`);
+      messages.push(`💰 Trade value estimated at significant bartering potential.`);
+      return messages;
+    }
+
+    // Default material item response
+    messages.push(`🔍 ${item.name} analyzed. Robot sensors detect this as potentially useful material, but no specific robotic applications identified. Item catalogued for future reference.`);
     return messages;
   }
 }

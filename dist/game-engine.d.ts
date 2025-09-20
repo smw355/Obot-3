@@ -15,5 +15,6 @@ export declare class GameEngine {
     calculateAttackDamage(): Promise<number>;
     usePlasmaTorch(gameState: GameState, target: string): Promise<string[]>;
     purifyWater(gameState: GameState, rawWaterId: string, purifierId: string): Promise<string[]>;
+    private handleMaterialItem;
 }
 //# sourceMappingURL=game-engine.d.ts.map
