@@ -7,6 +7,15 @@ export declare const BASEMENT_ROOMS: {
         };
         cleared: boolean;
     };
+    BUNKER_AIRLOCK: {
+        name: string;
+        description: string;
+        exits: {
+            up: string;
+            down: string;
+        };
+        cleared: boolean;
+    };
     STORAGE_15: {
         name: string;
         description: string;

@@ -5,18 +5,25 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BASEMENT_HAZARDS = exports.BASEMENT_MOBS = exports.BASEMENT_ITEMS = exports.BASEMENT_ROOMS = void 0;
 exports.BASEMENT_ROOMS = {
-    // BUNKER - Safe command center (A9, accessed from Storage 15)
+    // BUNKER - Safe command center (A9, accessed from Storage 15 via airlock)
     "BUNKER": {
         name: "Command Bunker",
-        description: "Your shielded underground command center built in the 1950s. Banks of monitors show radiation readings from the surface. Emergency supplies line the reinforced concrete walls. This fallout shelter was retrofitted into the basement when the Cold War fears peaked.",
-        exits: { up: "STORAGE_15" },
+        description: "Your shielded underground command center built in the 1950s. Banks of monitors show radiation readings from the surface. Emergency supplies line the reinforced concrete walls. This fallout shelter was retrofitted into the basement when the Cold War fears peaked. A secure airlock provides access to the storage level above.",
+        exits: { up: "BUNKER_AIRLOCK" },
+        cleared: true
+    },
+    // AIRLOCK - Secure transition between bunker and storage
+    "BUNKER_AIRLOCK": {
+        name: "Bunker Airlock",
+        description: "A small pressurized chamber with heavy steel doors on both ends. Red and green lights indicate the airlock cycle status. This ensures the bunker remains sealed from surface contamination while allowing access. Emergency controls are clearly marked for both manual and automatic operation.",
+        exits: { up: "STORAGE_15", down: "BUNKER" },
         cleared: true
     },
     // STORAGE AREAS - Tenant storage lockers
     "STORAGE_15": {
         name: "Storage Unit 15 - Starting Point",
-        description: "Your storage unit where obot-3 is parked. Metal shelving lines the walls with various boxes and equipment. A heavy steel door marked 'FALLOUT SHELTER' leads down to the bunker. This is where you safely store and deploy your robot.",
-        exits: { north: "HALLWAY_B8", down: "BUNKER" },
+        description: "Your storage unit where obot-3 is parked. Metal shelving lines the walls with various boxes and equipment. A heavy steel door marked 'FALLOUT SHELTER' leads down to the bunker airlock. This is where you safely store and deploy your robot.",
+        exits: { north: "HALLWAY_B8", down: "BUNKER_AIRLOCK" },
         cleared: true
     },
     "STORAGE_16": {

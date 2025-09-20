@@ -310,9 +310,9 @@ export class GameEngine {
     const exits = Object.entries(roomData.exits);
     let retreatRoom = null;
     
-    // Priority: BUNKER > STORAGE_15 > any room closer to bunker > random room
+    // Priority: BUNKER > BUNKER_AIRLOCK > STORAGE_15 > any room closer to bunker > random room
     for (const [direction, roomId] of exits) {
-      if (roomId === 'BUNKER' || roomId === 'STORAGE_15') {
+      if (roomId === 'BUNKER' || roomId === 'BUNKER_AIRLOCK' || roomId === 'STORAGE_15') {
         retreatRoom = roomId;
         break;
       }
