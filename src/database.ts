@@ -101,6 +101,9 @@ export class Database {
     
     this.db = new SQL.Database(buffer);
 
+    // Migrate existing databases to add new columns
+    this.migrateDatabase();
+
     // Create tables
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS game_state (
@@ -139,7 +142,10 @@ export class Database {
         type TEXT NOT NULL,
         value INTEGER NOT NULL DEFAULT 0,
         energyCost INTEGER NOT NULL DEFAULT 0,
-        location TEXT NOT NULL
+        location TEXT NOT NULL,
+        foodValue INTEGER DEFAULT 0,
+        energyValue INTEGER DEFAULT 0,
+        waterValue INTEGER DEFAULT 0
       );
 
       CREATE TABLE IF NOT EXISTS mobs (
@@ -200,6 +206,54 @@ export class Database {
   private saveDatabase(): void {
     const data = this.db.export();
     fs.writeFileSync(this.dbPath, data);
+  }
+
+  private migrateDatabase(): void {
+    try {
+      // Check if foodValue column exists in items table
+      const stmt = this.db.prepare("PRAGMA table_info(items)");
+      const columns = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        columns.push(row.name);
+      }
+      stmt.free();
+      
+      // Add missing columns if they don't exist
+      if (!columns.includes('foodValue')) {
+        this.db.exec('ALTER TABLE items ADD COLUMN foodValue INTEGER DEFAULT 0');
+      }
+      if (!columns.includes('energyValue')) {
+        this.db.exec('ALTER TABLE items ADD COLUMN energyValue INTEGER DEFAULT 0');
+      }
+      if (!columns.includes('waterValue')) {
+        this.db.exec('ALTER TABLE items ADD COLUMN waterValue INTEGER DEFAULT 0');
+      }
+      
+      // Update existing items with their proper values from world data
+      this.updateExistingItemValues();
+      
+      this.saveDatabase();
+    } catch (error) {
+      // Migration failed, but continue - database might not exist yet
+      console.log('Database migration skipped (new database)');
+    }
+  }
+
+  private updateExistingItemValues(): void {
+    // Update specific items with their food/energy/water values
+    const itemUpdates = [
+      { id: 'bag_of_funyuns_001', foodValue: 4 },
+      { id: 'organic_plant_food_001', foodValue: 2 },
+      { id: 'caretaker_food_supply_001', foodValue: 8 }
+    ];
+    
+    for (const update of itemUpdates) {
+      this.db.run(
+        'UPDATE items SET foodValue = ? WHERE id = ?',
+        [update.foodValue, update.id]
+      );
+    }
   }
 
   async initializeBunkerSupplies(): Promise<void> {

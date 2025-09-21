@@ -168,6 +168,19 @@ class Obot3Server {
                             },
                         },
                     },
+                    {
+                        name: 'equip_from_bunker',
+                        description: 'Retrieve and equip weapons and tools from bunker storage before deploying on a mission',
+                        inputSchema: {
+                            type: 'object',
+                            properties: {
+                                item_name: {
+                                    type: 'string',
+                                    description: 'Name of the weapon or tool to retrieve from bunker storage',
+                                },
+                            },
+                        },
+                    },
                 ],
             };
         });
@@ -214,6 +227,9 @@ class Obot3Server {
                         break;
                     case 'access_discovered_intel':
                         result = await this.handleAccessDiscoveredIntel(args?.type);
+                        break;
+                    case 'equip_from_bunker':
+                        result = await this.handleEquipFromBunker(args?.item_name);
                         break;
                     default:
                         throw new Error(`Unknown tool: ${name}`);
@@ -443,9 +459,13 @@ Commander, every supply I deliver could mean the difference between your surviva
             }
             // Check for blocked by boxes
             if (newRoomData.blocked_by_boxes) {
-                return {
-                    content: [{ type: 'text', text: `📦 The entrance is blocked by stacked boxes and furniture. Use 'interact boxes move' to clear the way.` }],
-                };
+                // Check if boxes have been cleared
+                const boxesCleared = await this.db.hasDiscoveredContent('boxes_cleared_caretaker');
+                if (!boxesCleared) {
+                    return {
+                        content: [{ type: 'text', text: `📦 The entrance is blocked by stacked boxes and furniture. Use 'interact boxes move' to clear the way.` }],
+                    };
+                }
             }
             // Check for plasma torch requirements
             if (newRoomData.requires_plasma_torch) {
@@ -614,17 +634,37 @@ Commander, every supply I deliver could mean the difference between your surviva
         else if (action === 'move' && target.toLowerCase().includes('box')) {
             // Handle moving boxes in CARETAKER_HALLWAY_BLOCKED
             if (gameState.currentRoom === 'CARETAKER_HALLWAY_BLOCKED') {
-                // Remove the blocked_by_boxes property by updating the room data
-                messages.push(`📦 obot-3 pushes aside the stacked boxes and furniture, clearing a path to the caretaker's apartment.`);
+                // Check energy cost for moving heavy boxes
+                const moveCost = 5;
+                if (gameState.energy < moveCost) {
+                    messages.push(`⚡ **Insufficient energy** - Moving heavy boxes requires ${moveCost} energy. Current: ${gameState.energy}`);
+                    return {
+                        content: [{ type: 'text', text: messages.join('\n') }],
+                    };
+                }
+                // Actually clear the blockage by updating the room data
+                await this.db.runAsync(`
+          INSERT OR REPLACE INTO rooms (id, name, description, exits, discovered, cleared) 
+          SELECT id, name, description, exits, discovered, cleared
+          FROM rooms WHERE id = 'CARETAKER_HALLWAY_BLOCKED'
+        `);
+                // Mark the blockage as cleared in a custom table or flag
+                await this.db.runAsync(`
+          INSERT OR REPLACE INTO discovered_content (id, type, title, content, itemSource)
+          VALUES ('boxes_cleared_caretaker', 'environmental', 'Boxes Cleared', 'Caretaker hallway boxes have been moved', 'manual_action')
+        `);
+                // Consume energy
+                await this.db.updateGameState({ energy: gameState.energy - moveCost });
+                messages.push(`📦 **BOXES CLEARED** - obot-3's hydraulic systems engage as I push aside the heavy stacked boxes and furniture.`);
+                messages.push(`💪 The obstruction gives way with effort, clearing a path to the caretaker's apartment complex.`);
                 messages.push(`✅ **Path cleared!** You can now move south to the caretaker's private hallway.`);
-                // This would require a database update to permanently clear the blockage
-                // For now, we'll give feedback that the boxes are moved
+                messages.push(`⚡ Energy consumed: ${moveCost} (${gameState.energy - moveCost}/${gameState.maxEnergy} remaining)`);
                 return {
                     content: [{ type: 'text', text: messages.join('\n') }],
                 };
             }
             else {
-                messages.push(`There are no boxes to move in this location.`);
+                messages.push(`There are no moveable boxes in this location.`);
             }
         }
         else if (action === 'examine') {
@@ -1176,6 +1216,96 @@ Commander, every supply I deliver could mean the difference between your surviva
             content: [{ type: 'text', text: response }],
         };
     }
+    async handleEquipFromBunker(itemName) {
+        const gameState = await this.db.getGameState();
+        if (!gameState)
+            throw new Error('Game not initialized');
+        // Check if we're at the bunker
+        if (gameState.currentRoom !== 'BUNKER' && gameState.currentRoom !== 'BUNKER_AIRLOCK' && gameState.currentRoom !== 'STORAGE_15') {
+            return {
+                content: [{ type: 'text', text: `🚫 **Cannot access bunker storage** - I must be at the bunker to retrieve equipment.\n\nCurrent location: ${gameState.currentRoom}` }],
+            };
+        }
+        // Get bunker inventory
+        const bunkerInventory = await this.db.getBunkerInventory();
+        if (!itemName) {
+            // Show available equipment
+            const weapons = bunkerInventory.filter(item => item.type === 'defense');
+            const tools = bunkerInventory.filter(item => item.type === 'technology');
+            let response = `🔧 **BUNKER EQUIPMENT STORAGE**\n\n`;
+            if (weapons.length > 0) {
+                response += `⚔️ **Available Weapons:**\n`;
+                weapons.forEach(item => {
+                    response += `  • ${item.name} (Qty: ${item.quantity})\n`;
+                });
+                response += '\n';
+            }
+            if (tools.length > 0) {
+                response += `🛠️ **Available Tools:**\n`;
+                tools.forEach(item => {
+                    response += `  • ${item.name} (Qty: ${item.quantity})\n`;
+                });
+                response += '\n';
+            }
+            if (weapons.length === 0 && tools.length === 0) {
+                response += `📦 No weapons or tools currently in storage.\n\n`;
+            }
+            response += `💡 **Usage:** Use 'equip_from_bunker' with specific item name to retrieve equipment.`;
+            return {
+                content: [{ type: 'text', text: response }],
+            };
+        }
+        // Find specific item
+        const targetItem = bunkerInventory.find(item => item.name.toLowerCase().includes(itemName.toLowerCase()) &&
+            (item.type === 'defense' || item.type === 'technology'));
+        if (!targetItem) {
+            return {
+                content: [{ type: 'text', text: `🚫 **Equipment not found** - "${itemName}" is not available in bunker storage.\n\nUse 'equip_from_bunker' without parameters to see available equipment.` }],
+            };
+        }
+        if (targetItem.quantity <= 0) {
+            return {
+                content: [{ type: 'text', text: `🚫 **Out of stock** - ${targetItem.name} quantity is 0.` }],
+            };
+        }
+        // Check carrying capacity
+        const currentWeight = await this.engine.calculateCarryingWeight();
+        const estimatedItemWeight = targetItem.name.includes('Knife') ? 0.8 :
+            targetItem.name.includes('Torch') ? 5.0 : 2.0; // Estimate weight
+        if (currentWeight + estimatedItemWeight > 25) {
+            return {
+                content: [{ type: 'text', text: `⚖️ **Weight limit** - Cannot carry ${targetItem.name}. Current weight: ${currentWeight.toFixed(1)}/30.0 lbs\n\nDrop some items first or deploy with lighter load.` }],
+            };
+        }
+        // Remove from bunker storage
+        const removed = await this.db.removeBunkerItem(targetItem.id, 1);
+        if (!removed) {
+            return {
+                content: [{ type: 'text', text: `🚫 **Error** - Unable to retrieve ${targetItem.name} from storage.` }],
+            };
+        }
+        // Add to robot inventory - we need to create this item in the items table
+        const itemId = `bunker_${targetItem.id}_${Date.now()}`;
+        await this.db.runAsync(`
+      INSERT INTO items (id, name, description, weight, type, value, energyCost, location)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+            itemId,
+            targetItem.name,
+            targetItem.description,
+            estimatedItemWeight,
+            targetItem.type === 'defense' ? 'weapon' : 'tool',
+            5, // Default value
+            0, // Default energy cost
+            'inventory'
+        ]);
+        return {
+            content: [{
+                    type: 'text',
+                    text: `✅ **Equipment Retrieved:** ${targetItem.name}\n\n🎒 The ${targetItem.name} has been equipped and is ready for deployment.\n\n⚖️ **Weight:** ${(currentWeight + estimatedItemWeight).toFixed(1)}/30.0 lbs`
+                }],
+        };
+    }
     async initialize() {
         await this.db.initialize();
         await this.db.initializeBunkerSupplies();
@@ -1195,9 +1325,21 @@ Commander, every supply I deliver could mean the difference between your surviva
         // Initialize items (only if they don't exist)
         for (const item of world_data_js_1.BASEMENT_ITEMS) {
             await this.db.runAsync(`
-        INSERT OR IGNORE INTO items (id, name, description, weight, type, value, energyCost, location)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `, [item.id, item.name, item.description, item.weight, item.type, item.value, item.energyCost, item.location]);
+        INSERT OR IGNORE INTO items (id, name, description, weight, type, value, energyCost, location, foodValue, energyValue, waterValue)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+                item.id,
+                item.name,
+                item.description,
+                item.weight,
+                item.type,
+                item.value,
+                item.energyCost,
+                item.location,
+                item.foodValue || 0,
+                item.energyValue || 0,
+                item.waterValue || 0
+            ]);
         }
         // Initialize mobs (only if they don't exist)
         for (const mob of world_data_js_1.BASEMENT_MOBS) {

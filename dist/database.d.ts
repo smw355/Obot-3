@@ -78,6 +78,8 @@ export declare class Database {
     constructor();
     initialize(): Promise<void>;
     private saveDatabase;
+    private migrateDatabase;
+    private updateExistingItemValues;
     initializeBunkerSupplies(): Promise<void>;
     getGameState(): Promise<GameState | null>;
     updateGameState(updates: Partial<GameState>): Promise<void>;
