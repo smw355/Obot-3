@@ -632,8 +632,8 @@ Commander, every supply I deliver could mean the difference between your surviva
             messages.push(...useMessages);
         }
         else if (action === 'move' && target.toLowerCase().includes('box')) {
-            // Handle moving boxes in CARETAKER_HALLWAY_BLOCKED
-            if (gameState.currentRoom === 'CARETAKER_HALLWAY_BLOCKED') {
+            // Handle moving boxes blocking the caretaker's hallway
+            if (gameState.currentRoom === 'CARETAKER_HALLWAY_BLOCKED' || gameState.currentRoom === 'LAUNDRY') {
                 // Check energy cost for moving heavy boxes
                 const moveCost = 5;
                 if (gameState.energy < moveCost) {
@@ -657,7 +657,12 @@ Commander, every supply I deliver could mean the difference between your surviva
                 await this.db.updateGameState({ energy: gameState.energy - moveCost });
                 messages.push(`📦 **BOXES CLEARED** - obot-3's hydraulic systems engage as I push aside the heavy stacked boxes and furniture.`);
                 messages.push(`💪 The obstruction gives way with effort, clearing a path to the caretaker's apartment complex.`);
-                messages.push(`✅ **Path cleared!** You can now move south to the caretaker's private hallway.`);
+                if (gameState.currentRoom === 'LAUNDRY') {
+                    messages.push(`✅ **Path cleared!** You can now move south from the Community Laundry Room to the caretaker's hallway.`);
+                }
+                else {
+                    messages.push(`✅ **Path cleared!** You can now move south to the caretaker's private hallway.`);
+                }
                 messages.push(`⚡ Energy consumed: ${moveCost} (${gameState.energy - moveCost}/${gameState.maxEnergy} remaining)`);
                 return {
                     content: [{ type: 'text', text: messages.join('\n') }],
@@ -686,7 +691,7 @@ Commander, every supply I deliver could mean the difference between your surviva
             }
             else {
                 // Check for special room features
-                if (target.toLowerCase().includes('box') && gameState.currentRoom === 'CARETAKER_HALLWAY_BLOCKED') {
+                if (target.toLowerCase().includes('box') && (gameState.currentRoom === 'CARETAKER_HALLWAY_BLOCKED' || gameState.currentRoom === 'LAUNDRY')) {
                     messages.push(`🔍 **Stacked Boxes and Furniture**\nThe entrance to the caretaker's apartment is blocked by hastily stacked boxes and furniture. They appear moveable with some effort. Use 'interact boxes move' to clear them.`);
                 }
                 else {
