@@ -124,6 +124,15 @@ class Database {
         description TEXT NOT NULL,
         survivalDays INTEGER
       );
+
+      CREATE TABLE IF NOT EXISTS discovered_content (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        discoveredAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        itemSource TEXT NOT NULL
+      );
     `);
         // Initialize default game state if it doesn't exist
         const stmt = this.db.prepare('SELECT * FROM game_state WHERE id = 1');
@@ -352,6 +361,40 @@ class Database {
             energy: gameState.bunkerEnergy,
             daysSinceIncident: gameState.daysSinceIncident
         };
+    }
+    // Discovered content management methods
+    async addDiscoveredContent(id, type, title, content, itemSource) {
+        this.db.run(`
+      INSERT OR REPLACE INTO discovered_content (id, type, title, content, itemSource)
+      VALUES (?, ?, ?, ?, ?)
+    `, [id, type, title, content, itemSource]);
+        this.saveDatabase();
+    }
+    async getDiscoveredContent() {
+        const stmt = this.db.prepare('SELECT * FROM discovered_content ORDER BY discoveredAt ASC');
+        const results = [];
+        while (stmt.step()) {
+            results.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return results;
+    }
+    async getDiscoveredContentByType(type) {
+        const stmt = this.db.prepare('SELECT * FROM discovered_content WHERE type = ? ORDER BY discoveredAt ASC');
+        const results = [];
+        stmt.bind([type]);
+        while (stmt.step()) {
+            results.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return results;
+    }
+    async hasDiscoveredContent(id) {
+        const stmt = this.db.prepare('SELECT COUNT(*) as count FROM discovered_content WHERE id = ?');
+        stmt.bind([id]);
+        const count = stmt.step() ? stmt.get()[0] : 0;
+        stmt.free();
+        return count > 0;
     }
 }
 exports.Database = Database;

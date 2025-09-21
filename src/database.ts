@@ -74,6 +74,15 @@ export interface BunkerInventory {
   survivalDays?: number;
 }
 
+export interface DiscoveredContent {
+  id: string;
+  type: string; // 'broadcast', 'blueprint', 'audio', 'intel', 'knowledge'
+  title: string;
+  content: string;
+  discoveredAt: string;
+  itemSource: string; // which item unlocked this content
+}
+
 export class Database {
   private db: any;
   private dbPath: string;
@@ -162,6 +171,15 @@ export class Database {
         type TEXT NOT NULL,
         description TEXT NOT NULL,
         survivalDays INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS discovered_content (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        discoveredAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        itemSource TEXT NOT NULL
       );
     `);
 
@@ -421,5 +439,43 @@ export class Database {
       energy: gameState.bunkerEnergy,
       daysSinceIncident: gameState.daysSinceIncident
     };
+  }
+
+  // Discovered content management methods
+  async addDiscoveredContent(id: string, type: string, title: string, content: string, itemSource: string): Promise<void> {
+    this.db.run(`
+      INSERT OR REPLACE INTO discovered_content (id, type, title, content, itemSource)
+      VALUES (?, ?, ?, ?, ?)
+    `, [id, type, title, content, itemSource]);
+    this.saveDatabase();
+  }
+
+  async getDiscoveredContent(): Promise<DiscoveredContent[]> {
+    const stmt = this.db.prepare('SELECT * FROM discovered_content ORDER BY discoveredAt ASC');
+    const results: DiscoveredContent[] = [];
+    while (stmt.step()) {
+      results.push(stmt.getAsObject() as DiscoveredContent);
+    }
+    stmt.free();
+    return results;
+  }
+
+  async getDiscoveredContentByType(type: string): Promise<DiscoveredContent[]> {
+    const stmt = this.db.prepare('SELECT * FROM discovered_content WHERE type = ? ORDER BY discoveredAt ASC');
+    const results: DiscoveredContent[] = [];
+    stmt.bind([type]);
+    while (stmt.step()) {
+      results.push(stmt.getAsObject() as DiscoveredContent);
+    }
+    stmt.free();
+    return results;
+  }
+
+  async hasDiscoveredContent(id: string): Promise<boolean> {
+    const stmt = this.db.prepare('SELECT COUNT(*) as count FROM discovered_content WHERE id = ?');
+    stmt.bind([id]);
+    const count = stmt.step() ? stmt.get()[0] : 0;
+    stmt.free();
+    return count > 0;
   }
 }

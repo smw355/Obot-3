@@ -64,6 +64,14 @@ export interface BunkerInventory {
     description: string;
     survivalDays?: number;
 }
+export interface DiscoveredContent {
+    id: string;
+    type: string;
+    title: string;
+    content: string;
+    discoveredAt: string;
+    itemSource: string;
+}
 export declare class Database {
     private db;
     private dbPath;
@@ -97,5 +105,9 @@ export declare class Database {
         energy: number;
         daysSinceIncident: number;
     }>;
+    addDiscoveredContent(id: string, type: string, title: string, content: string, itemSource: string): Promise<void>;
+    getDiscoveredContent(): Promise<DiscoveredContent[]>;
+    getDiscoveredContentByType(type: string): Promise<DiscoveredContent[]>;
+    hasDiscoveredContent(id: string): Promise<boolean>;
 }
 //# sourceMappingURL=database.d.ts.map

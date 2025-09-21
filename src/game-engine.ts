@@ -456,6 +456,40 @@ export class GameEngine {
       messages.push(`"Government evacuation zones are: Sectors 12, 15, and 18... Avoid all other areas..."`);
       messages.push(`"If you can hear this, stay underground. Do not venture to surface until all-clear signal."`);
       messages.push(`📻 Radio reception fades. Emergency broadcast information logged.`);
+      
+      // Save the full broadcast content
+      const broadcastContent = `🔴 **EMERGENCY BROADCAST - STATION ALPHA-7**
+
+📅 **Day ${gameState.daysSinceIncident} since the nuclear incident**
+📍 **Location:** Los Angeles Emergency Command
+
+⚠️  **CRITICAL ALERT:** Radiation levels remain at dangerous levels across downtown Los Angeles. All civilians must seek immediate underground shelter.
+
+🚨 **EVACUATION ZONES - AUTHORIZED PERSONNEL ONLY:**
+- Sector 12: Beverly Hills / West Hollywood corridor  
+- Sector 15: Santa Monica / Venice evacuation route
+- Sector 18: Burbank / Glendale safe passage
+
+⛔ **AVOID ALL OTHER AREAS** - Contamination levels exceed survivable thresholds
+
+🏠 **SHELTER PROTOCOL:** Remain underground until official all-clear signal broadcast. Surface exposure will result in fatal radiation poisoning.
+
+📡 **Next broadcast in 6 hours. Stay strong, stay hidden.**
+
+*[Signal degrades to static...]*`;
+
+      // Check if we already discovered this to avoid duplicates
+      const existingBroadcast = await this.db.hasDiscoveredContent('emergency_broadcast_alpha7');
+      if (!existingBroadcast) {
+        await this.db.addDiscoveredContent(
+          'emergency_broadcast_alpha7',
+          'broadcast', 
+          'Emergency Station Alpha-7 Broadcast',
+          broadcastContent,
+          item.name
+        );
+        messages.push(`💾 **Emergency broadcast archived to obot-3 memory banks.**`);
+      }
       return messages;
     }
 
@@ -469,6 +503,67 @@ export class GameEngine {
       messages.push(`- Hidden areas: Service tunnels connect to adjacent buildings`);
       messages.push(`- Power systems: Main electrical room controls all building power`);
       messages.push(`🤖 Navigation database updated with structural information.`);
+
+      // Save the detailed blueprint analysis
+      const blueprintContent = `🏗️ **ARCHITECTURAL ANALYSIS REPORT**
+**Building:** 420 S. Grand Avenue Residential Complex
+**Analysis Date:** Post-incident Day ${gameState.daysSinceIncident}
+
+📐 **STRUCTURAL LAYOUT:**
+- **Floors:** 12 residential floors + basement levels
+- **Construction:** 1970s reinforced concrete with steel frame
+- **Building Dimensions:** 180ft x 120ft footprint
+
+🚪 **EMERGENCY EXITS (3 Routes):**
+1. **Main Lobby Stairwell** (North side) - Access via basement stairs
+   - Steel fire doors, may be blocked by debris
+   - Direct route to Grand Avenue
+
+2. **Service Elevator Shaft** (Center) - Emergency ladder system  
+   - Manual override required, electrical systems compromised
+   - Access to parking garage level
+
+3. **Sub-basement Tunnel System** (South side)
+   - Connects to adjacent buildings on Hope Street
+   - Maintenance access, requires plasma torch for sealed hatches
+
+⚠️  **STRUCTURAL VULNERABILITIES:**
+- Northeast corner: Stress fractures in support columns (avoid heavy loads)
+- Floors 8-12: Water damage from compromised roof systems
+- Basement level: Minor flooding in electrical room area
+
+🔌 **BUILDING SYSTEMS:**
+- **Main Electrical:** Room B-12 controls all building power
+- **Emergency Power:** Backup generators in sub-basement
+- **Water Systems:** Main shutoff in mechanical room
+- **HVAC:** Roof units compromised, basement systems functional
+
+🗺️ **HIDDEN AREAS:**
+- Service tunnels behind maintenance room (keycard access)
+- Concealed storage behind false walls in basement
+- Rooftop access through hidden stairwell (Floor 12)
+
+🔧 **MAINTENANCE ACCESS:**
+- Building superintendent apartment: Basement level, south wing
+- Master key storage: Maintenance office
+- Tool cache: Workshop area, plasma torch location confirmed
+
+📊 **TACTICAL ASSESSMENT:**
+- Best escape route: Sub-basement tunnels (safest from surface radiation)
+- Backup route: Main lobby (fastest but highest exposure risk)
+- Resource priority: Secure plasma torch for tunnel access`;
+
+      const existingBlueprints = await this.db.hasDiscoveredContent('building_blueprints_analysis');
+      if (!existingBlueprints) {
+        await this.db.addDiscoveredContent(
+          'building_blueprints_analysis',
+          'blueprint',
+          'Building Architectural Analysis',
+          blueprintContent,
+          item.name
+        );
+        messages.push(`💾 **Architectural data archived to navigation database.**`);
+      }
       return messages;
     }
 

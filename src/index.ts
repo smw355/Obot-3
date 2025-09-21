@@ -163,6 +163,19 @@ class Obot3Server {
               required: ['direction'],
             },
           },
+          {
+            name: 'access_discovered_intel',
+            description: 'Access previously discovered content from material items (radio broadcasts, blueprints, audio files, intel reports)',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                type: {
+                  type: 'string',
+                  description: 'Type of content to access (broadcast, blueprint, audio, intel, knowledge) or "all" for everything',
+                },
+              },
+            },
+          },
         ] as Tool[],
       };
     });
@@ -208,6 +221,9 @@ class Obot3Server {
             break;
           case 'use_plasma_torch':
             result = await this.handleUsePlasmaTorch(args?.direction as string);
+            break;
+          case 'access_discovered_intel':
+            result = await this.handleAccessDiscoveredIntel(args?.type as string);
             break;
           default:
             throw new Error(`Unknown tool: ${name}`);
@@ -1233,6 +1249,78 @@ Commander, every supply I deliver could mean the difference between your surviva
     await this.db.updateGameState({
       turnNumber: gameState.turnNumber + 3
     });
+
+    return {
+      content: [{ type: 'text', text: response }],
+    };
+  }
+
+  private async handleAccessDiscoveredIntel(type?: string) {
+    const gameState = await this.db.getGameState();
+    if (!gameState) throw new Error('Game not initialized');
+
+    let content;
+    let response = `🧠 **OBOT-3 MEMORY BANKS - DISCOVERED INTELLIGENCE**\n\n`;
+
+    if (!type || type === 'all') {
+      // Get all discovered content
+      content = await this.db.getDiscoveredContent();
+      if (content.length === 0) {
+        return {
+          content: [{ type: 'text', text: `📄 No intelligence gathered yet. Use material items (radio, blueprints, books, etc.) to discover intel.` }],
+        };
+      }
+
+      response += `📊 **${content.length} Intelligence Files Available**\n\n`;
+      
+      // Group by type
+      const contentByType = content.reduce((acc: any, item) => {
+        if (!acc[item.type]) acc[item.type] = [];
+        acc[item.type].push(item);
+        return acc;
+      }, {});
+
+      for (const [contentType, items] of Object.entries(contentByType)) {
+        const typeIcon = contentType === 'broadcast' ? '📡' : 
+                        contentType === 'blueprint' ? '📐' : 
+                        contentType === 'audio' ? '🎵' : 
+                        contentType === 'intel' ? '🔍' : 
+                        contentType === 'knowledge' ? '📚' : '📄';
+        response += `${typeIcon} **${contentType.toUpperCase()} FILES:**\n`;
+        (items as any[]).forEach(item => {
+          response += `  • ${item.title} (from ${item.itemSource})\n`;
+        });
+        response += '\n';
+      }
+      
+      response += `💡 **Access specific content:** Use 'access_discovered_intel' with type parameter\n`;
+      response += `📋 **Available types:** broadcast, blueprint, audio, intel, knowledge\n`;
+
+    } else {
+      // Get specific type
+      content = await this.db.getDiscoveredContentByType(type);
+      if (content.length === 0) {
+        return {
+          content: [{ type: 'text', text: `📄 No ${type} intelligence files found. Use material items to discover intel.` }],
+        };
+      }
+
+      const typeIcon = type === 'broadcast' ? '📡' : 
+                      type === 'blueprint' ? '📐' : 
+                      type === 'audio' ? '🎵' : 
+                      type === 'intel' ? '🔍' : 
+                      type === 'knowledge' ? '📚' : '📄';
+
+      response += `${typeIcon} **${type.toUpperCase()} INTELLIGENCE FILES**\n\n`;
+      
+      content.forEach((item, index) => {
+        response += `📄 **FILE ${index + 1}: ${item.title}**\n`;
+        response += `🔗 Source: ${item.itemSource}\n`;
+        response += `📅 Discovered: ${item.discoveredAt}\n\n`;
+        response += `${item.content}\n\n`;
+        response += `${'='.repeat(60)}\n\n`;
+      });
+    }
 
     return {
       content: [{ type: 'text', text: response }],
