@@ -358,7 +358,7 @@ Commander, every supply I deliver could mean the difference between your surviva
     }
 
     // Check if we have enough energy for exploration
-    const exploreCost = 3;
+    const exploreCost = 1;
     if (gameState.energy < exploreCost) {
       return await this.handleEnergyDepleted(gameState);
     }
@@ -457,7 +457,7 @@ Commander, every supply I deliver could mean the difference between your surviva
     }
 
     // Check if we have enough energy for movement
-    const moveCost = 2;
+    const moveCost = 1;
     if (gameState.energy < moveCost) {
       return await this.handleEnergyDepleted(gameState);
     }

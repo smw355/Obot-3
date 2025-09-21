@@ -195,7 +195,7 @@ export class Database {
     if (!existingState) {
       this.db.run(`
         INSERT INTO game_state (id, currentRoom, health, energy, maxEnergy, carryingWeight, turnNumber, gameCompleted, missionStarted, daysSinceIncident, bunkerFood, bunkerWater, bunkerEnergy) 
-        VALUES (1, 'STORAGE_15', 100, 100, 100, 0, 1, 0, 0, 12, 7, 10, 15)
+        VALUES (1, 'STORAGE_15', 100, 150, 150, 0, 1, 0, 0, 12, 7, 10, 15)
       `);
     }
     stmt.free();
