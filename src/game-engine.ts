@@ -309,7 +309,7 @@ export class GameEngine {
     
     if (!roomData) return;
     
-    // Prefer moving toward bunker (B01) or to BUNKER if available
+    // Prefer moving toward bunker (STORAGE_15) or to BUNKER if available
     const exits = Object.entries(roomData.exits);
     let retreatRoom = null;
     

@@ -936,7 +936,7 @@ Commander, every supply I deliver could mean the difference between your surviva
 
     // Reset robot position to starting area  
     await this.db.updateGameState({ 
-      currentRoom: 'B01',
+      currentRoom: 'STORAGE_15',
       carryingWeight: 0,
       turnNumber: gameState.turnNumber + 5 // Return trip takes time
     });
@@ -1112,12 +1112,12 @@ Commander, every supply I deliver could mean the difference between your surviva
     const gameState = await this.db.getGameState();
     if (!gameState) throw new Error('Game not initialized');
 
-    // Check if we're at the bunker (BUNKER or B01)
-    if (gameState.currentRoom !== 'BUNKER' && gameState.currentRoom !== 'B01') {
+    // Check if we're at the bunker (BUNKER, BUNKER_AIRLOCK, or STORAGE_15)
+    if (gameState.currentRoom !== 'BUNKER' && gameState.currentRoom !== 'BUNKER_AIRLOCK' && gameState.currentRoom !== 'STORAGE_15') {
       return {
         content: [{ 
           type: 'text', 
-          text: `🚫 **Cannot rest here** - I can only rest and recharge at the bunker.\n\nCurrent location: ${gameState.currentRoom}\nI need to return to bunker (BUNKER or B01) to safely recharge overnight.` 
+          text: `🚫 **Cannot rest here** - I can only rest and recharge at the bunker.\n\nCurrent location: ${gameState.currentRoom}\nI need to return to bunker (BUNKER, BUNKER_AIRLOCK, or STORAGE_15) to safely recharge overnight.` 
         }],
       };
     }

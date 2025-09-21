@@ -253,7 +253,7 @@ class GameEngine {
         const roomData = world_data_js_1.BASEMENT_ROOMS[currentRoom];
         if (!roomData)
             return;
-        // Prefer moving toward bunker (B01) or to BUNKER if available
+        // Prefer moving toward bunker (STORAGE_15) or to BUNKER if available
         const exits = Object.entries(roomData.exits);
         let retreatRoom = null;
         // Priority: BUNKER > BUNKER_AIRLOCK > STORAGE_15 > any room closer to bunker > random room
