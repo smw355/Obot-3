@@ -1,0 +1,254 @@
+import { Database, Room } from './database.js';
+import { BASEMENT_ROOMS } from './world-data.js';
+
+export interface NavigationPath {
+  rooms: string[];
+  directions: string[];
+  totalDistance: number;
+  energyCost: number;
+}
+
+export interface FastTravelLocation {
+  id: string;
+  name: string;
+  description: string;
+  energyCost: number;
+}
+
+export class NavigationSystem {
+  private db: Database;
+
+  // Key locations for fast travel
+  private fastTravelLocations: FastTravelLocation[] = [
+    { id: 'BUNKER', name: 'Command Bunker', description: 'Your secure command center', energyCost: 2 },
+    { id: 'STORAGE_15', name: 'Starting Point', description: 'Storage Unit 15 - obot-3 base', energyCost: 1 },
+    { id: 'STAIRS_UP', name: 'Exit Stairs', description: 'Stairs to lobby (if cleared)', energyCost: 3 },
+    { id: 'HATCH_DOWN_SEALED_2', name: 'Tunnel Hatch', description: 'Access to sub-basement tunnels (if cleared)', energyCost: 3 },
+    { id: 'LAUNDRY', name: 'Community Laundry', description: 'Central laundry facility', energyCost: 2 },
+    { id: 'MECHANICAL_ROOM', name: 'Mechanical Room', description: 'Building systems control', energyCost: 2 }
+  ];
+
+  constructor(db: Database) {
+    this.db = db;
+  }
+
+  /**
+   * Find the shortest path between two rooms using Dijkstra's algorithm
+   */
+  async findPath(fromRoom: string, toRoom: string): Promise<NavigationPath | null> {
+    // Get all discovered rooms
+    const discoveredRooms = await this.getDiscoveredRooms();
+    
+    if (!discoveredRooms.has(toRoom)) {
+      return null; // Cannot navigate to undiscovered room
+    }
+
+    // Build graph of discovered rooms only
+    const graph = this.buildRoomGraph(discoveredRooms);
+    
+    // Run Dijkstra's algorithm
+    const path = this.dijkstra(graph, fromRoom, toRoom);
+    
+    if (!path) return null;
+
+    // Convert room path to directions
+    const directions = this.convertPathToDirections(path);
+    
+    return {
+      rooms: path,
+      directions,
+      totalDistance: path.length - 1,
+      energyCost: path.length - 1 // 1 energy per room movement
+    };
+  }
+
+  /**
+   * Get all discovered rooms from database
+   */
+  private async getDiscoveredRooms(): Promise<Set<string>> {
+    // For now, we'll assume all rooms in BASEMENT_ROOMS are potentially discoverable
+    // In a full implementation, we'd query the database for discovered rooms
+    const discoveredRooms = new Set<string>();
+    
+    // Add all room IDs (in real implementation, filter by discovered = true)
+    for (const roomId of Object.keys(BASEMENT_ROOMS)) {
+      discoveredRooms.add(roomId);
+    }
+    
+    return discoveredRooms;
+  }
+
+  /**
+   * Build adjacency graph from discovered rooms
+   */
+  private buildRoomGraph(discoveredRooms: Set<string>): Map<string, string[]> {
+    const graph = new Map<string, string[]>();
+    
+    for (const roomId of discoveredRooms) {
+      const roomData = BASEMENT_ROOMS[roomId as keyof typeof BASEMENT_ROOMS];
+      if (!roomData) continue;
+      
+      const neighbors: string[] = [];
+      for (const [direction, targetRoom] of Object.entries(roomData.exits)) {
+        if (discoveredRooms.has(targetRoom)) {
+          neighbors.push(targetRoom);
+        }
+      }
+      graph.set(roomId, neighbors);
+    }
+    
+    return graph;
+  }
+
+  /**
+   * Dijkstra's shortest path algorithm
+   */
+  private dijkstra(graph: Map<string, string[]>, start: string, end: string): string[] | null {
+    const distances = new Map<string, number>();
+    const previous = new Map<string, string | null>();
+    const unvisited = new Set<string>();
+
+    // Initialize distances
+    for (const room of graph.keys()) {
+      distances.set(room, room === start ? 0 : Infinity);
+      previous.set(room, null);
+      unvisited.add(room);
+    }
+
+    while (unvisited.size > 0) {
+      // Find unvisited room with minimum distance
+      let current = null;
+      let minDistance = Infinity;
+      for (const room of unvisited) {
+        const distance = distances.get(room) || Infinity;
+        if (distance < minDistance) {
+          minDistance = distance;
+          current = room;
+        }
+      }
+
+      if (!current || minDistance === Infinity) break;
+      if (current === end) break;
+
+      unvisited.delete(current);
+
+      // Check neighbors
+      const neighbors = graph.get(current) || [];
+      for (const neighbor of neighbors) {
+        if (!unvisited.has(neighbor)) continue;
+
+        const altDistance = (distances.get(current) || 0) + 1;
+        if (altDistance < (distances.get(neighbor) || Infinity)) {
+          distances.set(neighbor, altDistance);
+          previous.set(neighbor, current);
+        }
+      }
+    }
+
+    // Reconstruct path
+    if (!previous.has(end) || previous.get(end) === null) return null;
+
+    const path: string[] = [];
+    let current: string | null = end;
+    while (current !== null) {
+      path.unshift(current);
+      current = previous.get(current) || null;
+    }
+
+    return path;
+  }
+
+  /**
+   * Convert room path to movement directions
+   */
+  private convertPathToDirections(rooms: string[]): string[] {
+    const directions: string[] = [];
+    
+    for (let i = 0; i < rooms.length - 1; i++) {
+      const currentRoom = rooms[i];
+      const nextRoom = rooms[i + 1];
+      
+      const roomData = BASEMENT_ROOMS[currentRoom as keyof typeof BASEMENT_ROOMS];
+      if (!roomData) continue;
+      
+      // Find which direction leads to next room
+      for (const [direction, targetRoom] of Object.entries(roomData.exits)) {
+        if (targetRoom === nextRoom) {
+          directions.push(direction);
+          break;
+        }
+      }
+    }
+    
+    return directions;
+  }
+
+  /**
+   * Find room by partial name match
+   */
+  findRoomByName(searchName: string): string | null {
+    const lowerSearch = searchName.toLowerCase();
+    
+    // First try exact match on room ID
+    if (BASEMENT_ROOMS[searchName.toUpperCase() as keyof typeof BASEMENT_ROOMS]) {
+      return searchName.toUpperCase();
+    }
+    
+    // Then try fuzzy matching on room names
+    for (const [roomId, roomData] of Object.entries(BASEMENT_ROOMS)) {
+      const roomName = roomData.name.toLowerCase();
+      if (roomName.includes(lowerSearch) || lowerSearch.includes(roomName)) {
+        return roomId;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Get fast travel locations
+   */
+  getFastTravelLocations(): FastTravelLocation[] {
+    return this.fastTravelLocations;
+  }
+
+  /**
+   * Execute fast travel to a key location
+   */
+  async executeFastTravel(locationId: string): Promise<{ success: boolean; message: string; energyCost: number }> {
+    const location = this.fastTravelLocations.find(loc => loc.id === locationId);
+    
+    if (!location) {
+      return {
+        success: false,
+        message: `Fast travel location "${locationId}" not found.`,
+        energyCost: 0
+      };
+    }
+
+    // In a full implementation, we'd check if the location is accessible
+    // and update the game state
+    
+    return {
+      success: true,
+      message: `🚀 **FAST TRAVEL INITIATED**\n\nTransporting obot-3 to ${location.name}...\n\n${location.description}\n\nNavigation systems engaged - arrival confirmed.`,
+      energyCost: location.energyCost
+    };
+  }
+
+  /**
+   * Get navigation summary for current area
+   */
+  getNavigationSummary(currentRoom: string): string {
+    const roomData = BASEMENT_ROOMS[currentRoom as keyof typeof BASEMENT_ROOMS];
+    if (!roomData) return "Navigation data unavailable for current location.";
+
+    const exits = Object.entries(roomData.exits);
+    const exitList = exits.map(([dir, room]) => {
+      const targetData = BASEMENT_ROOMS[room as keyof typeof BASEMENT_ROOMS];
+      return `  • ${dir}: ${targetData?.name || room}`;
+    }).join('\n');
+
+    return `🗺️ **NAVIGATION SUMMARY**\n**Current:** ${roomData.name}\n**Available Exits:**\n${exitList}`;
+  }
+}

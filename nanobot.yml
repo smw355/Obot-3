@@ -3,7 +3,7 @@ agents:
     name: Obot-3
     model: gpt-4.1
     mcpServers: backend
-    name: HitBot-3000
+    name: Obot-3
     description: |
       Obot-3 is an exploration robot.
     icon: |

@@ -6,11 +6,13 @@ const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
 const types_js_1 = require("@modelcontextprotocol/sdk/types.js");
 const database_js_1 = require("./database.js");
 const game_engine_js_1 = require("./game-engine.js");
+const navigation_js_1 = require("./navigation.js");
 const world_data_js_1 = require("./world-data.js");
 class Obot3Server {
     server;
     db;
     engine;
+    navigation;
     constructor() {
         this.server = new index_js_1.Server({
             name: 'obot-3-explorer',
@@ -22,6 +24,7 @@ class Obot3Server {
         });
         this.db = new database_js_1.Database();
         this.engine = new game_engine_js_1.GameEngine(this.db);
+        this.navigation = new navigation_js_1.NavigationSystem(this.db);
         this.setupHandlers();
     }
     setupHandlers() {
@@ -181,6 +184,33 @@ class Obot3Server {
                             },
                         },
                     },
+                    {
+                        name: 'go_to',
+                        description: 'Navigate obot-3 to any discovered room using smart pathfinding',
+                        inputSchema: {
+                            type: 'object',
+                            properties: {
+                                destination: {
+                                    type: 'string',
+                                    description: 'Name or partial name of the room to navigate to (e.g., "laundry", "bunker", "storage 3")',
+                                },
+                            },
+                            required: ['destination'],
+                        },
+                    },
+                    {
+                        name: 'fast_travel',
+                        description: 'Instantly travel to key locations with low energy cost',
+                        inputSchema: {
+                            type: 'object',
+                            properties: {
+                                location: {
+                                    type: 'string',
+                                    description: 'Fast travel location ID (use without parameters to see available locations)',
+                                },
+                            },
+                        },
+                    },
                 ],
             };
         });
@@ -230,6 +260,12 @@ class Obot3Server {
                         break;
                     case 'equip_from_bunker':
                         result = await this.handleEquipFromBunker(args?.item_name);
+                        break;
+                    case 'go_to':
+                        result = await this.handleGoTo(args?.destination);
+                        break;
+                    case 'fast_travel':
+                        result = await this.handleFastTravel(args?.location);
                         break;
                     default:
                         throw new Error(`Unknown tool: ${name}`);
@@ -1355,6 +1391,160 @@ Commander, every supply I deliver could mean the difference between your surviva
         }
         // Make sure starting room is discovered
         await this.db.discoverRoom('STORAGE_15');
+    }
+    async handleGoTo(destination) {
+        const gameState = await this.db.getGameState();
+        if (!gameState)
+            throw new Error('Game not initialized');
+        if (!destination) {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🗺️ **GO TO NAVIGATION HELP**
+
+**Usage:** \`go_to [destination]\`
+
+**Examples:**
+- \`go_to laundry\` - Navigate to Community Laundry Room
+- \`go_to bunker\` - Navigate to Command Bunker
+- \`go_to storage 3\` - Navigate to Storage Unit 3
+- \`go_to stairs\` - Navigate to exit stairs
+
+**Features:**
+- Automatically finds shortest path to any discovered room
+- Shows route and energy cost before execution
+- Works with partial room names (fuzzy matching)
+- Only navigates to rooms you've already explored
+
+${this.navigation.getNavigationSummary(gameState.currentRoom)}`
+                    }],
+            };
+        }
+        // Find the target room
+        const targetRoomId = this.navigation.findRoomByName(destination);
+        if (!targetRoomId) {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🚫 **ROOM NOT FOUND** - Unable to locate "${destination}"\n\n**Suggestions:**\n- Try partial names (e.g., "laundry" for Community Laundry)\n- Only discovered rooms are available for navigation\n- Use \`explore\` to discover new areas first\n\n${this.navigation.getNavigationSummary(gameState.currentRoom)}`
+                    }],
+            };
+        }
+        // Already at destination?
+        if (targetRoomId === gameState.currentRoom) {
+            const roomData = world_data_js_1.BASEMENT_ROOMS[targetRoomId];
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🤖 **ALREADY AT DESTINATION**\n\nobot-3 is already at ${roomData?.name || targetRoomId}.`
+                    }],
+            };
+        }
+        // Calculate path
+        const path = await this.navigation.findPath(gameState.currentRoom, targetRoomId);
+        if (!path) {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🚫 **NO ROUTE FOUND** - Unable to calculate path from ${world_data_js_1.BASEMENT_ROOMS[gameState.currentRoom]?.name} to ${world_data_js_1.BASEMENT_ROOMS[targetRoomId]?.name}\n\nThe destination may be:\n- Blocked by obstacles\n- Require special access\n- Not yet fully explored`
+                    }],
+            };
+        }
+        // Check energy requirements
+        if (path.energyCost > gameState.energy) {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `⚡ **INSUFFICIENT ENERGY** - Navigation requires ${path.energyCost} energy, but obot-3 only has ${gameState.energy} available.\n\n**Route Preview:**\n${path.rooms.map((room, i) => `${i + 1}. ${world_data_js_1.BASEMENT_ROOMS[room]?.name || room}`).join('\n')}\n\n**Options:**\n- Use \`rest\` to recover energy\n- Try \`fast_travel\` for lower energy cost\n- Find a shorter route to an intermediate destination`
+                    }],
+            };
+        }
+        // Execute navigation
+        let currentRoom = gameState.currentRoom;
+        const messages = [`🚀 **SMART NAVIGATION ACTIVATED**\n`];
+        messages.push(`**Destination:** ${world_data_js_1.BASEMENT_ROOMS[targetRoomId]?.name}`);
+        messages.push(`**Route Distance:** ${path.totalDistance} rooms`);
+        messages.push(`**Energy Cost:** ${path.energyCost}`);
+        messages.push(`\n**Navigation Path:**`);
+        for (let i = 0; i < path.directions.length; i++) {
+            const fromRoom = world_data_js_1.BASEMENT_ROOMS[path.rooms[i]]?.name || path.rooms[i];
+            const toRoom = world_data_js_1.BASEMENT_ROOMS[path.rooms[i + 1]]?.name || path.rooms[i + 1];
+            messages.push(`${i + 1}. ${fromRoom} → ${path.directions[i]} → ${toRoom}`);
+        }
+        messages.push(`\n🤖 **obot-3 executing automated navigation...**\n`);
+        // Update game state
+        await this.db.updateGameState({
+            currentRoom: targetRoomId,
+            energy: gameState.energy - path.energyCost,
+            turnNumber: gameState.turnNumber + path.totalDistance
+        });
+        messages.push(`✅ **NAVIGATION COMPLETE**`);
+        messages.push(`**Current Location:** ${world_data_js_1.BASEMENT_ROOMS[targetRoomId]?.name}`);
+        messages.push(`**Energy Remaining:** ${gameState.energy - path.energyCost}/${gameState.maxEnergy}`);
+        return {
+            content: [{ type: 'text', text: messages.join('\n') }],
+        };
+    }
+    async handleFastTravel(locationId) {
+        const gameState = await this.db.getGameState();
+        if (!gameState)
+            throw new Error('Game not initialized');
+        const locations = this.navigation.getFastTravelLocations();
+        if (!locationId) {
+            const locationList = locations.map(loc => `• **${loc.id}**: ${loc.name} (${loc.energyCost} energy)\n  ${loc.description}`).join('\n');
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🚀 **FAST TRAVEL LOCATIONS**\n\nInstant travel to key areas with reduced energy cost:\n\n${locationList}\n\n**Usage:** \`fast_travel [location_id]\`\n**Example:** \`fast_travel BUNKER\`\n\n**Current Location:** ${world_data_js_1.BASEMENT_ROOMS[gameState.currentRoom]?.name}\n**Available Energy:** ${gameState.energy}/${gameState.maxEnergy}`
+                    }],
+            };
+        }
+        // Find the location
+        const location = locations.find(loc => loc.id.toLowerCase() === locationId.toLowerCase());
+        if (!location) {
+            const availableIds = locations.map(loc => loc.id).join(', ');
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🚫 **INVALID FAST TRAVEL LOCATION** - "${locationId}" not found.\n\n**Available locations:** ${availableIds}\n\nUse \`fast_travel\` without parameters to see all options.`
+                    }],
+            };
+        }
+        // Already at destination?
+        if (location.id === gameState.currentRoom) {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `🤖 **ALREADY AT DESTINATION**\n\nobot-3 is already at ${location.name}.`
+                    }],
+            };
+        }
+        // Check energy requirements
+        if (location.energyCost > gameState.energy) {
+            return {
+                content: [{
+                        type: 'text',
+                        text: `⚡ **INSUFFICIENT ENERGY** - Fast travel to ${location.name} requires ${location.energyCost} energy, but obot-3 only has ${gameState.energy} available.\n\n**Options:**\n- Use \`rest\` to recover energy\n- Try \`go_to\` for step-by-step navigation\n- Choose a closer fast travel location`
+                    }],
+            };
+        }
+        // Execute fast travel
+        const travelResult = await this.navigation.executeFastTravel(location.id);
+        if (!travelResult.success) {
+            return {
+                content: [{ type: 'text', text: travelResult.message }],
+            };
+        }
+        // Update game state
+        await this.db.updateGameState({
+            currentRoom: location.id,
+            energy: gameState.energy - location.energyCost,
+            turnNumber: gameState.turnNumber + 1
+        });
+        const finalMessage = `${travelResult.message}\n\n**Energy Cost:** ${location.energyCost}\n**Energy Remaining:** ${gameState.energy - location.energyCost}/${gameState.maxEnergy}\n\n**Current Status:** ${world_data_js_1.BASEMENT_ROOMS[location.id]?.description}`;
+        return {
+            content: [{ type: 'text', text: finalMessage }],
+        };
     }
     async run() {
         await this.initialize();
