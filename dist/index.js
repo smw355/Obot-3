@@ -519,13 +519,7 @@ Commander, every supply I deliver could mean the difference between your surviva
         // Check for special room access requirements
         const newRoomData = world_data_js_1.BASEMENT_ROOMS[newRoomId];
         if (newRoomData) {
-            // Check for locked doors
-            if (newRoomData.locked) {
-                return {
-                    content: [{ type: 'text', text: `🚫 The door is locked. You need to find a way to unlock it.` }],
-                };
-            }
-            // Check for maintenance key requirement
+            // Check for maintenance key requirement FIRST (before generic locked check)
             if (newRoomData.requires_maintenance_key) {
                 const items = await this.db.getItemsInLocation('inventory');
                 const hasKey = items.some(item => item.id === 'maintenance_keys_001');
@@ -534,6 +528,12 @@ Commander, every supply I deliver could mean the difference between your surviva
                         content: [{ type: 'text', text: `🔐 This door requires maintenance keys. The keycard reader blinks red, but there's a traditional keyhole below it.` }],
                     };
                 }
+            }
+            // Check for generic locked doors (after specific key checks)
+            if (newRoomData.locked && !newRoomData.requires_maintenance_key) {
+                return {
+                    content: [{ type: 'text', text: `🚫 The door is locked. You need to find a way to unlock it.` }],
+                };
             }
             // Check for blocked by boxes
             if (newRoomData.blocked_by_boxes) {
