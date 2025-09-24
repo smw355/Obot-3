@@ -91,10 +91,15 @@ export class GameEngine {
 
     await this.db.updateGameState({ health: newHealth });
 
+    // Get fresh game state after health update
+    const updatedGameState = await this.db.getGameState();
+    if (!updatedGameState) throw new Error('Failed to get updated game state after health update');
+    gameState = updatedGameState;
+
     // Check for energy-based automatic retreat first
     if (gameState.energy <= 5) {
       messages.push("⚡ EMERGENCY ENERGY RETREAT: Power reserves critical - automatic withdrawal initiated!");
-      await this.attemptEnergyRetreat(gameState);
+      gameState = await this.attemptEnergyRetreat(gameState);
       messages.push("🤖 obot-3 disengages from combat to preserve remaining power systems.");
       return messages;
     }
@@ -104,7 +109,7 @@ export class GameEngine {
       messages.push("🔋 WARNING: obot-3 is critically damaged and attempting to flee!");
       // 75% chance to successfully flee
       if (Math.random() < 0.75) {
-        await this.attemptFlee(gameState);
+        gameState = await this.attemptFlee(gameState);
         messages.push("obot-3 successfully retreats to a safer location.");
       } else {
         messages.push("obot-3 is unable to escape!");
@@ -114,7 +119,7 @@ export class GameEngine {
     // Check if obot-3 is destroyed
     if (newHealth <= 0) {
       messages.push("💀 SYSTEM FAILURE: obot-3 has been destroyed!");
-      await this.enterMaintenanceMode(gameState);
+      gameState = await this.enterMaintenanceMode(gameState);
     }
 
     return messages;
@@ -152,7 +157,7 @@ export class GameEngine {
     return null;
   }
 
-  private async attemptFlee(gameState: GameState): Promise<void> {
+  private async attemptFlee(gameState: GameState): Promise<GameState> {
     // Try to move to a random connected room
     const room = await this.db.getRoom(gameState.currentRoom);
     if (room?.exits) {
@@ -161,18 +166,23 @@ export class GameEngine {
       if (exitKeys.length > 0) {
         const randomExit = exitKeys[Math.floor(Math.random() * exitKeys.length)];
         const newRoom = exits[randomExit];
-        await this.db.updateGameState({ 
+        await this.db.updateGameState({
           currentRoom: newRoom,
           inCombat: false // Clear combat state when fleeing
         });
+
+        // Return fresh game state after database update
+        const updatedState = await this.db.getGameState();
+        return updatedState || gameState;
       }
     }
+    return gameState;
   }
 
-  private async enterMaintenanceMode(gameState: GameState): Promise<void> {
+  private async enterMaintenanceMode(gameState: GameState): Promise<GameState> {
     // Reduce max energy by 10%
     const newMaxEnergy = Math.floor(gameState.maxEnergy * 0.9);
-    
+
     // Repair to 25% health and return to base
     await this.db.updateGameState({
       health: 25,
@@ -186,6 +196,10 @@ export class GameEngine {
     for (const effect of effects) {
       await this.db.updateCombatEffectDuration(effect.id, 0);
     }
+
+    // Return fresh game state after all updates
+    const updatedState = await this.db.getGameState();
+    return updatedState || gameState;
   }
 
   // Process ongoing combat effects
@@ -202,7 +216,7 @@ export class GameEngine {
         messages.push(`💢 ${effect.description} - obot-3 takes ${effect.value} damage`);
         
         if (newHealth <= 0) {
-          await this.enterMaintenanceMode(gameState);
+          gameState = await this.enterMaintenanceMode(gameState);
           messages.push("💀 Ongoing damage causes system failure - entering maintenance mode!");
           break;
         }
@@ -302,17 +316,17 @@ export class GameEngine {
     return messages;
   }
 
-  private async attemptEnergyRetreat(gameState: GameState): Promise<void> {
+  private async attemptEnergyRetreat(gameState: GameState): Promise<GameState> {
     // Energy retreat - try to move toward bunker or to a safer adjacent room
     const currentRoom = gameState.currentRoom;
     const roomData = BASEMENT_ROOMS[currentRoom as keyof typeof BASEMENT_ROOMS];
-    
-    if (!roomData) return;
-    
+
+    if (!roomData) return gameState;
+
     // Prefer moving toward bunker (STORAGE_15) or to BUNKER if available
     const exits = Object.entries(roomData.exits);
     let retreatRoom = null;
-    
+
     // Priority: BUNKER > BUNKER_AIRLOCK > STORAGE_15 > any room closer to bunker > random room
     for (const [direction, roomId] of exits) {
       if (roomId === 'BUNKER' || roomId === 'BUNKER_AIRLOCK' || roomId === 'STORAGE_15') {
@@ -320,19 +334,25 @@ export class GameEngine {
         break;
       }
     }
-    
+
     // If no direct path to bunker, pick first available exit
     if (!retreatRoom && exits.length > 0) {
       retreatRoom = exits[0][1];
     }
-    
+
     if (retreatRoom) {
-      await this.db.updateGameState({ 
+      await this.db.updateGameState({
         currentRoom: retreatRoom,
         turnNumber: gameState.turnNumber + 1,
         inCombat: false // Clear combat state when retreating
       });
+
+      // Return fresh game state after database update
+      const updatedState = await this.db.getGameState();
+      return updatedState || gameState;
     }
+
+    return gameState;
   }
 
   // Calculate robot's attack damage including weapon bonuses
