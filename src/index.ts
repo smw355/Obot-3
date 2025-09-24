@@ -82,8 +82,8 @@ class Obot3Server {
                 },
                 action: {
                   type: 'string',
-                  description: 'Action to perform (examine, take, attack, use)',
-                  enum: ['examine', 'take', 'attack', 'use'],
+                  description: 'Action to perform (examine, take, attack, use, move)',
+                  enum: ['examine', 'take', 'attack', 'use', 'move'],
                 },
               },
               required: ['target', 'action'],
