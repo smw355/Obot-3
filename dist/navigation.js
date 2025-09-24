@@ -25,8 +25,8 @@ class NavigationSystem {
         if (!discoveredRooms.has(toRoom)) {
             return null; // Cannot navigate to undiscovered room
         }
-        // Build graph of discovered rooms only
-        const graph = this.buildRoomGraph(discoveredRooms);
+        // Build graph of discovered rooms only, checking access requirements
+        const graph = await this.buildRoomGraph(discoveredRooms);
         // Run Dijkstra's algorithm
         const path = this.dijkstra(graph, fromRoom, toRoom);
         if (!path)
@@ -44,19 +44,20 @@ class NavigationSystem {
      * Get all discovered rooms from database
      */
     async getDiscoveredRooms() {
-        // For now, we'll assume all rooms in BASEMENT_ROOMS are potentially discoverable
-        // In a full implementation, we'd query the database for discovered rooms
         const discoveredRooms = new Set();
-        // Add all room IDs (in real implementation, filter by discovered = true)
+        // Query database for actually discovered rooms
         for (const roomId of Object.keys(world_data_js_1.BASEMENT_ROOMS)) {
-            discoveredRooms.add(roomId);
+            const room = await this.db.getRoom(roomId);
+            if (room && room.discovered) {
+                discoveredRooms.add(roomId);
+            }
         }
         return discoveredRooms;
     }
     /**
-     * Build adjacency graph from discovered rooms
+     * Build adjacency graph from discovered rooms, checking access requirements
      */
-    buildRoomGraph(discoveredRooms) {
+    async buildRoomGraph(discoveredRooms) {
         const graph = new Map();
         for (const roomId of discoveredRooms) {
             const roomData = world_data_js_1.BASEMENT_ROOMS[roomId];
@@ -65,12 +66,60 @@ class NavigationSystem {
             const neighbors = [];
             for (const [direction, targetRoom] of Object.entries(roomData.exits)) {
                 if (discoveredRooms.has(targetRoom)) {
-                    neighbors.push(targetRoom);
+                    // Check if target room is accessible (not blocked by unmet requirements)
+                    const isAccessible = await this.isRoomAccessible(targetRoom);
+                    if (isAccessible) {
+                        neighbors.push(targetRoom);
+                    }
                 }
             }
             graph.set(roomId, neighbors);
         }
         return graph;
+    }
+    /**
+     * Check if a room is accessible based on current player inventory and game state
+     */
+    async isRoomAccessible(roomId) {
+        const roomData = world_data_js_1.BASEMENT_ROOMS[roomId];
+        if (!roomData)
+            return false;
+        // Check maintenance keycard requirements
+        if (roomData.requires_maintenance_keycard) {
+            const items = await this.db.getItemsInLocation('inventory');
+            const hasKeycard = items.some(item => item.id === 'maintenance_keycard_001');
+            if (!hasKeycard) {
+                return false;
+            }
+        }
+        // Check physical maintenance keys requirements
+        if (roomData.requires_maintenance_keys) {
+            const items = await this.db.getItemsInLocation('inventory');
+            const hasKeys = items.some(item => item.id === 'maintenance_keys_001');
+            if (!hasKeys) {
+                return false;
+            }
+        }
+        // Check for plasma torch requirements
+        if (roomData.requires_plasma_torch) {
+            const items = await this.db.getItemsInLocation('inventory');
+            const hasTorch = items.some(item => item.id === 'plasma_torch_001');
+            if (!hasTorch) {
+                return false;
+            }
+        }
+        // Check for boxes blocking (can be cleared, so check if already cleared)
+        if (roomData.blocked_by_boxes) {
+            const boxesCleared = await this.db.hasDiscoveredContent('boxes_cleared_caretaker');
+            if (!boxesCleared) {
+                return false;
+            }
+        }
+        // Check generic locked doors (without specific unlock methods)
+        if (roomData.locked && !roomData.requires_maintenance_keycard && !roomData.requires_maintenance_keys) {
+            return false;
+        }
+        return true;
     }
     /**
      * Dijkstra's shortest path algorithm

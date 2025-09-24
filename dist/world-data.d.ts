@@ -429,7 +429,7 @@ export declare const BASEMENT_ROOMS: {
         };
         cleared: boolean;
         locked: boolean;
-        requires_maintenance_key: boolean;
+        requires_maintenance_keycard: boolean;
     };
     MAINTENANCE_HALLWAY: {
         name: string;
@@ -475,6 +475,8 @@ export declare const BASEMENT_ROOMS: {
             south: string;
         };
         cleared: boolean;
+        locked: boolean;
+        requires_maintenance_keys: boolean;
     };
     BUILDING_STORAGE_2: {
         name: string;

@@ -82,8 +82,8 @@ class Obot3Server {
                 },
                 action: {
                   type: 'string',
-                  description: 'Action to perform (examine, take, attack, use, move)',
-                  enum: ['examine', 'take', 'attack', 'use', 'move'],
+                  description: 'Action to perform (examine, take, attack, use, move, drop)',
+                  enum: ['examine', 'take', 'attack', 'use', 'move', 'drop'],
                 },
               },
               required: ['target', 'action'],
@@ -519,19 +519,32 @@ Commander, every supply I deliver could mean the difference between your surviva
     // Check for special room access requirements
     const newRoomData = BASEMENT_ROOMS[newRoomId as keyof typeof BASEMENT_ROOMS];
     if (newRoomData) {
-      // Check for maintenance key requirement FIRST (before generic locked check)
-      if ((newRoomData as any).requires_maintenance_key) {
+      // Check for maintenance keycard requirement FIRST (before generic locked check)
+      if ((newRoomData as any).requires_maintenance_keycard) {
         const items = await this.db.getItemsInLocation('inventory');
-        const hasKey = items.some(item => item.id === 'maintenance_keys_001');
-        if (!hasKey) {
+        const hasKeycard = items.some(item => item.id === 'maintenance_keycard_001');
+
+        if (!hasKeycard) {
           return {
-            content: [{ type: 'text', text: `🔐 This door requires maintenance keys. The keycard reader blinks red, but there's a traditional keyhole below it.` }],
+            content: [{ type: 'text', text: `🔐 The keycard reader blinks red - you need a maintenance keycard to access this area.` }],
+          };
+        }
+      }
+
+      // Check for physical maintenance keys requirement (for other areas)
+      if ((newRoomData as any).requires_maintenance_keys) {
+        const items = await this.db.getItemsInLocation('inventory');
+        const hasKeys = items.some(item => item.id === 'maintenance_keys_001');
+
+        if (!hasKeys) {
+          return {
+            content: [{ type: 'text', text: `🔐 This area requires maintenance keys - the lock needs a physical key.` }],
           };
         }
       }
 
       // Check for generic locked doors (after specific key checks)
-      if ((newRoomData as any).locked && !(newRoomData as any).requires_maintenance_key) {
+      if ((newRoomData as any).locked && !(newRoomData as any).requires_maintenance_keycard && !(newRoomData as any).requires_maintenance_keys) {
         return {
           content: [{ type: 'text', text: `🚫 The door is locked. You need to find a way to unlock it.` }],
         };
@@ -784,6 +797,25 @@ Commander, every supply I deliver could mean the difference between your surviva
       } else {
         messages.push(`There are no moveable boxes in this location.`);
       }
+
+    } else if (action === 'drop') {
+      // Drop item from inventory to current room
+      const items = await this.db.getItemsInLocation('inventory');
+      const item = items.find(i => i.name.toLowerCase().includes(target.toLowerCase()));
+
+      if (!item) {
+        return {
+          content: [{ type: 'text', text: `Item "${target}" not found in your inventory.` }],
+        };
+      }
+
+      // Move item from inventory to current room
+      await this.db.moveItem(item.id, gameState.currentRoom);
+      messages.push(`📦 obot-3 drops ${item.name} (${item.weight}lbs) in ${gameState.currentRoom}`);
+
+      // Update carrying weight display
+      const newWeight = await this.engine.calculateCarryingWeight();
+      messages.push(`⚖️  New carrying weight: ${newWeight.toFixed(1)}lbs/30lbs`);
 
     } else if (action === 'examine') {
       // Examine items, mobs, or room features

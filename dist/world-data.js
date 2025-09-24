@@ -384,15 +384,15 @@ exports.BASEMENT_ROOMS = {
     },
     // MAINTENANCE SECTION (Locked behind maintenance door)
     "MAINTENANCE_DOOR_LOCKED": {
-        name: "Maintenance Section Door - LOCKED",
-        description: "A heavy steel door marked 'AUTHORIZED PERSONNEL ONLY'. A keycard reader beside the handle blinks red, but there's also a traditional keyhole below it.",
+        name: "Maintenance Section Door - KEYCARD ACCESS",
+        description: "A heavy steel door marked 'AUTHORIZED PERSONNEL ONLY'. A keycard reader beside the handle blinks red, waiting for authorized access.",
         exits: {
             west: "HALLWAY_H2",
             east: "MAINTENANCE_HALLWAY"
         },
         cleared: false,
         locked: true,
-        requires_maintenance_key: true
+        requires_maintenance_keycard: true
     },
     "MAINTENANCE_HALLWAY": {
         name: "Maintenance Section Hallway",
@@ -428,13 +428,15 @@ exports.BASEMENT_ROOMS = {
     },
     // BUILDING STORAGE
     "BUILDING_STORAGE_1": {
-        name: "Building Storage Room 1",
-        description: "A large storage room for building maintenance supplies and equipment. Shelves hold everything from light bulbs to replacement parts for the building systems.",
+        name: "Building Storage Room 1 - LOCKED",
+        description: "A large storage room for building maintenance supplies and equipment. The door has a traditional lock that requires maintenance keys.",
         exits: {
             west: "MAINTENANCE_HALLWAY",
             south: "BUILDING_STORAGE_2"
         },
-        cleared: false
+        cleared: false,
+        locked: true,
+        requires_maintenance_keys: true
     },
     "BUILDING_STORAGE_2": {
         name: "Building Storage Room 2",
@@ -678,9 +680,19 @@ exports.BASEMENT_ITEMS = [
     },
     // Caretaker Apartment
     {
+        id: "maintenance_keycard_001",
+        name: "Maintenance Access Keycard",
+        description: "A security keycard for accessing the maintenance section. The magnetic stripe looks intact.",
+        weight: 0.1,
+        type: "keycard",
+        value: 0,
+        energyCost: 0,
+        location: "CARETAKER_BEDROOM"
+    },
+    {
         id: "maintenance_keys_001",
-        name: "Building Maintenance Keys",
-        description: "A key ring with keys to the maintenance section and other restricted areas",
+        name: "Building Maintenance Key Ring",
+        description: "A key ring with various building maintenance keys for service rooms, storage areas, and emergency systems",
         weight: 0.3,
         type: "key",
         value: 0,

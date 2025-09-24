@@ -24,9 +24,13 @@ export declare class NavigationSystem {
      */
     private getDiscoveredRooms;
     /**
-     * Build adjacency graph from discovered rooms
+     * Build adjacency graph from discovered rooms, checking access requirements
      */
     private buildRoomGraph;
+    /**
+     * Check if a room is accessible based on current player inventory and game state
+     */
+    private isRoomAccessible;
     /**
      * Dijkstra's shortest path algorithm
      */
