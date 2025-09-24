@@ -1,5 +1,38 @@
 #!/usr/bin/env node
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 const index_js_1 = require("@modelcontextprotocol/sdk/server/index.js");
 const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
@@ -8,6 +41,7 @@ const database_js_1 = require("./database.js");
 const game_engine_js_1 = require("./game-engine.js");
 const navigation_js_1 = require("./navigation.js");
 const world_data_js_1 = require("./world-data.js");
+const packageJson = __importStar(require("../package.json"));
 class Obot3Server {
     server;
     db;
@@ -16,7 +50,7 @@ class Obot3Server {
     constructor() {
         this.server = new index_js_1.Server({
             name: 'obot-3-explorer',
-            version: '1.0.0',
+            version: packageJson.version,
         }, {
             capabilities: {
                 tools: {},
@@ -384,16 +418,20 @@ Commander, every supply I deliver could mean the difference between your surviva
         }
         // Consume energy for exploration
         await this.db.updateGameState({ energy: gameState.energy - exploreCost });
-        await this.db.discoverRoom(gameState.currentRoom);
-        const room = await this.db.getRoom(gameState.currentRoom);
-        const roomData = world_data_js_1.BASEMENT_ROOMS[gameState.currentRoom];
+        // Get fresh game state after energy update
+        const updatedGameState = await this.db.getGameState();
+        if (!updatedGameState)
+            throw new Error('Failed to retrieve updated game state');
+        await this.db.discoverRoom(updatedGameState.currentRoom);
+        const room = await this.db.getRoom(updatedGameState.currentRoom);
+        const roomData = world_data_js_1.BASEMENT_ROOMS[updatedGameState.currentRoom];
         if (!room || !roomData)
             throw new Error('Invalid room');
         // Get items in the room
-        const items = await this.db.getItemsInLocation(gameState.currentRoom);
-        const mobs = await this.db.getMobsInLocation(gameState.currentRoom);
+        const items = await this.db.getItemsInLocation(updatedGameState.currentRoom);
+        const mobs = await this.db.getMobsInLocation(updatedGameState.currentRoom);
         // Check for enemy detection while exploring (only if not already in combat)
-        if (mobs.length > 0 && !gameState.inCombat) {
+        if (mobs.length > 0 && !updatedGameState.inCombat) {
             const detectionResult = await this.checkRoomDetection(mobs);
             if (detectionResult.detected) {
                 // Combat triggered during exploration
@@ -402,15 +440,18 @@ Commander, every supply I deliver could mean the difference between your surviva
         }
         // Check for environmental hazards
         let hazardMessage = '';
-        const hazard = world_data_js_1.BASEMENT_HAZARDS[gameState.currentRoom];
+        const hazard = world_data_js_1.BASEMENT_HAZARDS[updatedGameState.currentRoom];
         if (hazard && Math.random() < hazard.triggerChance) {
             const damage = this.engine.rollDice(hazard.damage);
-            const newHealth = Math.max(0, gameState.health - damage);
+            const newHealth = Math.max(0, updatedGameState.health - damage);
             await this.db.updateGameState({ health: newHealth });
             hazardMessage = `\n⚠️  **HAZARD DETECTED:** ${hazard.name} - ${hazard.description} I've sustained ${damage} ${hazard.damageType} damage!`;
         }
-        // Process ongoing combat effects
-        const effectMessages = await this.engine.processCombatEffects(gameState);
+        // Get fresh state after potential hazard damage and process ongoing combat effects
+        const finalGameState = await this.db.getGameState();
+        if (!finalGameState)
+            throw new Error('Failed to retrieve final game state');
+        const effectMessages = await this.engine.processCombatEffects(finalGameState);
         let description = `🤖 **SCANNING CURRENT AREA...**\n\n`;
         description += `📍 **My Current Location:** ${roomData.name}\n`;
         description += `🔍 **Visual Analysis:** ${roomData.description}\n\n`;
@@ -446,7 +487,8 @@ Commander, every supply I deliver could mean the difference between your surviva
         if (effectMessages.length > 0) {
             description += '\n' + effectMessages.join('\n');
         }
-        await this.db.updateGameState({ turnNumber: gameState.turnNumber + 1 });
+        // Update turn number using fresh game state
+        await this.db.updateGameState({ turnNumber: finalGameState.turnNumber + 1 });
         return {
             content: [{ type: 'text', text: description }],
         };
@@ -535,9 +577,9 @@ Commander, every supply I deliver could mean the difference between your surviva
             }
             // If not in active combat, allow stealth movement but with risk
         }
-        // Consume energy for movement
-        await this.db.updateGameState({ energy: gameState.energy - moveCost });
+        // Consume energy for movement and update position atomically
         await this.db.updateGameState({
+            energy: gameState.energy - moveCost,
             currentRoom: newRoomId,
             turnNumber: gameState.turnNumber + 1
         });
@@ -556,9 +598,12 @@ Commander, every supply I deliver could mean the difference between your surviva
                 // Fall through to continue with normal movement
             }
         }
+        // Get fresh game state after all updates
+        const updatedGameState = await this.db.getGameState();
+        if (!updatedGameState)
+            throw new Error('Failed to retrieve updated game state');
         // Check weight limits after movement
-        const updatedGameState2 = await this.db.getGameState();
-        const weightMessages = updatedGameState2 ? await this.engine.checkWeightLimits(updatedGameState2) : [];
+        const weightMessages = await this.engine.checkWeightLimits(updatedGameState);
         const destinationRoom = world_data_js_1.BASEMENT_ROOMS[newRoomId];
         let response = `🚶 obot-3 moves ${direction} to ${destinationRoom.name}`;
         if (weightMessages.length > 0) {
@@ -601,12 +646,12 @@ Commander, every supply I deliver could mean the difference between your surviva
             await this.db.updateGameState({ energy: gameState.energy - pickupCost });
             await this.db.moveItem(item.id, 'inventory');
             messages.push(`✅ obot-3 picks up ${item.name} (${item.weight}lbs)`);
-            // Check weight limits after taking item
+            // Get fresh game state and check weight limits after taking item
             const updatedGameState = await this.db.getGameState();
-            if (updatedGameState) {
-                const weightMessages = await this.engine.checkWeightLimits(updatedGameState);
-                messages.push(...weightMessages);
-            }
+            if (!updatedGameState)
+                throw new Error('Failed to retrieve updated game state');
+            const weightMessages = await this.engine.checkWeightLimits(updatedGameState);
+            messages.push(...weightMessages);
         }
         else if (action === 'attack') {
             // Check energy cost for combat
@@ -641,10 +686,11 @@ Commander, every supply I deliver could mean the difference between your surviva
                     await this.db.updateGameState({ inCombat: false });
                     messages.push('🏆 **AREA SECURED** - All hostiles neutralized. obot-3 is no longer in combat.');
                 }
-                // Check if this was the final boss (workshop)
-                if (gameState.currentRoom === 'WORKSHOP' && mob.id === 'maintenance_bot_corrupted_001') {
+                // Check if this was the final boss (workshop) - get fresh state first
+                const currentGameState = await this.db.getGameState();
+                if (currentGameState && currentGameState.currentRoom === 'WORKSHOP' && mob.id === 'maintenance_bot_corrupted_001') {
                     messages.push('\n🎉 **WORKSHOP SECURED!** The corrupted maintenance android has been neutralized and the plasma torch is now accessible!');
-                    await this.db.clearRoom(gameState.currentRoom);
+                    await this.db.clearRoom(currentGameState.currentRoom);
                 }
             }
             else {
@@ -735,7 +781,11 @@ Commander, every supply I deliver could mean the difference between your surviva
                 }
             }
         }
-        await this.db.updateGameState({ turnNumber: gameState.turnNumber + 1 });
+        // Get fresh game state to update turn number correctly
+        const finalGameState = await this.db.getGameState();
+        if (finalGameState) {
+            await this.db.updateGameState({ turnNumber: finalGameState.turnNumber + 1 });
+        }
         return {
             content: [{ type: 'text', text: messages.join('\n') }],
         };

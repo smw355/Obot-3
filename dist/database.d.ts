@@ -111,5 +111,18 @@ export declare class Database {
     getDiscoveredContent(): Promise<DiscoveredContent[]>;
     getDiscoveredContentByType(type: string): Promise<DiscoveredContent[]>;
     hasDiscoveredContent(id: string): Promise<boolean>;
+    /**
+     * Execute multiple database operations atomically within a transaction
+     * If any operation fails, all changes are rolled back
+     */
+    executeTransaction(operations: Array<{
+        sql: string;
+        params?: any[];
+    }>): Promise<void>;
+    /**
+     * Execute a callback function within a transaction context
+     * Provides more flexibility for complex transaction logic
+     */
+    withTransaction<T>(callback: () => T | Promise<T>): Promise<T>;
 }
 //# sourceMappingURL=database.d.ts.map

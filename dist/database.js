@@ -139,16 +139,11 @@ class Database {
         itemSource TEXT NOT NULL
       );
     `);
-        // Initialize default game state if it doesn't exist
-        const stmt = this.db.prepare('SELECT * FROM game_state WHERE id = 1');
-        const existingState = stmt.step() ? stmt.getAsObject() : null;
-        if (!existingState) {
-            this.db.run(`
-        INSERT INTO game_state (id, currentRoom, health, energy, maxEnergy, carryingWeight, turnNumber, gameCompleted, missionStarted, daysSinceIncident, bunkerFood, bunkerWater, bunkerEnergy) 
-        VALUES (1, 'STORAGE_15', 100, 150, 150, 0, 1, 0, 0, 12, 7, 10, 15)
-      `);
-        }
-        stmt.free();
+        // Initialize default game state if it doesn't exist - use INSERT OR IGNORE for atomicity
+        this.db.run(`
+      INSERT OR IGNORE INTO game_state (id, currentRoom, health, energy, maxEnergy, carryingWeight, turnNumber, gameCompleted, missionStarted, daysSinceIncident, bunkerFood, bunkerWater, bunkerEnergy)
+      VALUES (1, 'STORAGE_15', 100, 150, 150, 0, 1, 0, 0, 12, 7, 10, 15)
+    `);
         this.saveDatabase();
     }
     saveDatabase() {
@@ -196,23 +191,24 @@ class Database {
         }
     }
     async initializeBunkerSupplies() {
-        const stmt = this.db.prepare('SELECT COUNT(*) as count FROM bunker_inventory');
-        const count = stmt.step() ? stmt.get()[0] : 0;
-        stmt.free();
-        if (count === 0) {
-            const supplies = [
-                ['emergency_rations', 'Emergency Rations', 3, 'food', 'Military-grade survival food packets', 2],
-                ['water_purification', 'Water Purification Tablets', 10, 'medicine', 'Chemical tablets for water sterilization', null],
-                ['backup_generator', 'Backup Generator', 1, 'fuel', 'Emergency power supply for critical systems', null]
-            ];
-            for (const supply of supplies) {
-                this.db.run(`
-          INSERT INTO bunker_inventory (id, name, quantity, type, description, survivalDays)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `, supply);
+        await this.withTransaction(() => {
+            const stmt = this.db.prepare('SELECT COUNT(*) as count FROM bunker_inventory');
+            const count = stmt.step() ? stmt.get()[0] : 0;
+            stmt.free();
+            if (count === 0) {
+                const supplies = [
+                    ['emergency_rations', 'Emergency Rations', 3, 'food', 'Military-grade survival food packets', 2],
+                    ['water_purification', 'Water Purification Tablets', 10, 'medicine', 'Chemical tablets for water sterilization', null],
+                    ['backup_generator', 'Backup Generator', 1, 'fuel', 'Emergency power supply for critical systems', null]
+                ];
+                for (const supply of supplies) {
+                    this.db.run(`
+            INSERT INTO bunker_inventory (id, name, quantity, type, description, survivalDays)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `, supply);
+                }
             }
-            this.saveDatabase();
-        }
+        });
     }
     async getGameState() {
         const stmt = this.db.prepare('SELECT * FROM game_state WHERE id = 1');
@@ -242,9 +238,10 @@ class Database {
         this.saveDatabase();
     }
     async clearRoom(id) {
-        this.db.run('DELETE FROM mobs WHERE location = ?', [id]);
-        this.db.run('UPDATE rooms SET cleared = 1 WHERE id = ?', [id]);
-        this.saveDatabase();
+        await this.executeTransaction([
+            { sql: 'DELETE FROM mobs WHERE location = ?', params: [id] },
+            { sql: 'UPDATE rooms SET cleared = 1 WHERE id = ?', params: [id] }
+        ]);
     }
     async updateRoomExits(roomId, exits) {
         this.db.run('UPDATE rooms SET exits = ? WHERE id = ?', [exits, roomId]);
@@ -325,39 +322,41 @@ class Database {
         return results;
     }
     async addToBunkerInventory(id, name, quantity, type, description, survivalDays) {
-        const stmt = this.db.prepare('SELECT * FROM bunker_inventory WHERE name = ?');
-        stmt.bind([name]);
-        const existing = stmt.step() ? stmt.getAsObject() : null;
-        stmt.free();
-        if (existing) {
-            this.db.run('UPDATE bunker_inventory SET quantity = quantity + ? WHERE name = ?', [quantity, name]);
-        }
-        else {
-            this.db.run(`
-        INSERT INTO bunker_inventory (id, name, quantity, type, description, survivalDays)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [id, name, quantity, type, description, survivalDays === undefined ? null : survivalDays]);
-        }
-        this.saveDatabase();
+        await this.withTransaction(() => {
+            const stmt = this.db.prepare('SELECT * FROM bunker_inventory WHERE name = ?');
+            stmt.bind([name]);
+            const existing = stmt.step() ? stmt.getAsObject() : null;
+            stmt.free();
+            if (existing) {
+                this.db.run('UPDATE bunker_inventory SET quantity = quantity + ? WHERE name = ?', [quantity, name]);
+            }
+            else {
+                this.db.run(`
+          INSERT INTO bunker_inventory (id, name, quantity, type, description, survivalDays)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `, [id, name, quantity, type, description, survivalDays === undefined ? null : survivalDays]);
+            }
+        });
     }
     async removeBunkerItem(itemId, quantity = 1) {
-        const stmt = this.db.prepare('SELECT * FROM bunker_inventory WHERE id = ?');
-        stmt.bind([itemId]);
-        const existing = stmt.step() ? stmt.getAsObject() : null;
-        stmt.free();
-        if (!existing || existing.quantity < quantity) {
-            return false; // Not enough items available
-        }
-        if (existing.quantity === quantity) {
-            // Remove the item entirely if we're taking all of them
-            this.db.run('DELETE FROM bunker_inventory WHERE id = ?', [itemId]);
-        }
-        else {
-            // Just reduce the quantity
-            this.db.run('UPDATE bunker_inventory SET quantity = quantity - ? WHERE id = ?', [quantity, itemId]);
-        }
-        this.saveDatabase();
-        return true;
+        return await this.withTransaction(() => {
+            const stmt = this.db.prepare('SELECT * FROM bunker_inventory WHERE id = ?');
+            stmt.bind([itemId]);
+            const existing = stmt.step() ? stmt.getAsObject() : null;
+            stmt.free();
+            if (!existing || existing.quantity < quantity) {
+                return false; // Not enough items available
+            }
+            if (existing.quantity === quantity) {
+                // Remove the item entirely if we're taking all of them
+                this.db.run('DELETE FROM bunker_inventory WHERE id = ?', [itemId]);
+            }
+            else {
+                // Just reduce the quantity
+                this.db.run('UPDATE bunker_inventory SET quantity = quantity - ? WHERE id = ?', [quantity, itemId]);
+            }
+            return true;
+        });
     }
     // Helper method for compatibility with existing code
     async runAsync(sql, params = []) {
@@ -440,6 +439,56 @@ class Database {
         const count = stmt.step() ? stmt.get()[0] : 0;
         stmt.free();
         return count > 0;
+    }
+    /**
+     * Execute multiple database operations atomically within a transaction
+     * If any operation fails, all changes are rolled back
+     */
+    async executeTransaction(operations) {
+        try {
+            // Begin transaction
+            this.db.run('BEGIN TRANSACTION');
+            // Execute all operations
+            for (const operation of operations) {
+                this.db.run(operation.sql, operation.params || []);
+            }
+            // Commit transaction
+            this.db.run('COMMIT');
+            // Save to disk after successful transaction
+            this.saveDatabase();
+        }
+        catch (error) {
+            // Rollback on any error
+            try {
+                this.db.run('ROLLBACK');
+            }
+            catch (rollbackError) {
+                console.error('Error during rollback:', rollbackError);
+            }
+            throw error;
+        }
+    }
+    /**
+     * Execute a callback function within a transaction context
+     * Provides more flexibility for complex transaction logic
+     */
+    async withTransaction(callback) {
+        try {
+            this.db.run('BEGIN TRANSACTION');
+            const result = await callback();
+            this.db.run('COMMIT');
+            this.saveDatabase();
+            return result;
+        }
+        catch (error) {
+            try {
+                this.db.run('ROLLBACK');
+            }
+            catch (rollbackError) {
+                console.error('Error during rollback:', rollbackError);
+            }
+            throw error;
+        }
     }
 }
 exports.Database = Database;

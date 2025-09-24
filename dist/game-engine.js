@@ -81,10 +81,15 @@ class GameEngine {
                 messages.push(effectMessage);
         }
         await this.db.updateGameState({ health: newHealth });
+        // Get fresh game state after health update
+        const updatedGameState = await this.db.getGameState();
+        if (!updatedGameState)
+            throw new Error('Failed to get updated game state after health update');
+        gameState = updatedGameState;
         // Check for energy-based automatic retreat first
         if (gameState.energy <= 5) {
             messages.push("⚡ EMERGENCY ENERGY RETREAT: Power reserves critical - automatic withdrawal initiated!");
-            await this.attemptEnergyRetreat(gameState);
+            gameState = await this.attemptEnergyRetreat(gameState);
             messages.push("🤖 obot-3 disengages from combat to preserve remaining power systems.");
             return messages;
         }
@@ -93,7 +98,7 @@ class GameEngine {
             messages.push("🔋 WARNING: obot-3 is critically damaged and attempting to flee!");
             // 75% chance to successfully flee
             if (Math.random() < 0.75) {
-                await this.attemptFlee(gameState);
+                gameState = await this.attemptFlee(gameState);
                 messages.push("obot-3 successfully retreats to a safer location.");
             }
             else {
@@ -103,7 +108,7 @@ class GameEngine {
         // Check if obot-3 is destroyed
         if (newHealth <= 0) {
             messages.push("💀 SYSTEM FAILURE: obot-3 has been destroyed!");
-            await this.enterMaintenanceMode(gameState);
+            gameState = await this.enterMaintenanceMode(gameState);
         }
         return messages;
     }
@@ -138,8 +143,12 @@ class GameEngine {
                     currentRoom: newRoom,
                     inCombat: false // Clear combat state when fleeing
                 });
+                // Return fresh game state after database update
+                const updatedState = await this.db.getGameState();
+                return updatedState || gameState;
             }
         }
+        return gameState;
     }
     async enterMaintenanceMode(gameState) {
         // Reduce max energy by 10%
@@ -156,6 +165,9 @@ class GameEngine {
         for (const effect of effects) {
             await this.db.updateCombatEffectDuration(effect.id, 0);
         }
+        // Return fresh game state after all updates
+        const updatedState = await this.db.getGameState();
+        return updatedState || gameState;
     }
     // Process ongoing combat effects
     async processCombatEffects(gameState) {
@@ -168,7 +180,7 @@ class GameEngine {
                 await this.db.updateCombatEffectDuration(effect.id, effect.duration - 1);
                 messages.push(`💢 ${effect.description} - obot-3 takes ${effect.value} damage`);
                 if (newHealth <= 0) {
-                    await this.enterMaintenanceMode(gameState);
+                    gameState = await this.enterMaintenanceMode(gameState);
                     messages.push("💀 Ongoing damage causes system failure - entering maintenance mode!");
                     break;
                 }
@@ -252,7 +264,7 @@ class GameEngine {
         const currentRoom = gameState.currentRoom;
         const roomData = world_data_js_1.BASEMENT_ROOMS[currentRoom];
         if (!roomData)
-            return;
+            return gameState;
         // Prefer moving toward bunker (STORAGE_15) or to BUNKER if available
         const exits = Object.entries(roomData.exits);
         let retreatRoom = null;
@@ -273,7 +285,11 @@ class GameEngine {
                 turnNumber: gameState.turnNumber + 1,
                 inCombat: false // Clear combat state when retreating
             });
+            // Return fresh game state after database update
+            const updatedState = await this.db.getGameState();
+            return updatedState || gameState;
         }
+        return gameState;
     }
     // Calculate robot's attack damage including weapon bonuses
     async calculateAttackDamage() {
